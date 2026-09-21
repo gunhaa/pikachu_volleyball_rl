@@ -276,24 +276,3 @@ class PikaPhysics(
     fun runEngineForNextFrame(userInputArray: Array<PikaUserInput>): Boolean =
         engine.run(player1, player2, ball, userInputArray)
 }
-
-/**
- * FUN_00403dd0 — 피카츄 발리볼 물리 엔진.
- *
- * ⚠️ **아직 포팅되지 않았다 (tasks.md P6).**
- *
- * 지금은 아무것도 하지 않고 `false` 를 반환한다.
- * 이 상태에서 차분 하네스를 돌리면 프레임 0 부터 불일치가 나야 하며,
- * 그것이 "하네스가 불일치를 제대로 잡는가" 에 대한 검증이 된다.
- */
-internal class PhysicsEngine(@Suppress("unused") private val rand: Rand) {
-    fun run(
-        @Suppress("unused") player1: Player,
-        @Suppress("unused") player2: Player,
-        @Suppress("unused") ball: Ball,
-        @Suppress("unused") userInputArray: Array<PikaUserInput>,
-    ): Boolean {
-        // TODO(P6): physics.js 를 plan.md §8 의 의존 순서대로 포팅한다.
-        return false
-    }
-}
