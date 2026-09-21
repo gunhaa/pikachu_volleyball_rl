@@ -6,5 +6,8 @@
   "description": "physics.js 를 정답(oracle)으로 돌려 프레임별 상태 해시를 뱉는다",
   "scripts": {
     "selfcheck": "node selfcheck.mjs"
+  },
+  "devDependencies": {
+    "c8": "^12.0.0"
   }
 }
