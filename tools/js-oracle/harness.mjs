@@ -45,11 +45,13 @@ export function resetRound(physics, isPlayer2Serve) {
 /**
  * 에피소드 하나를 돌린다.
  *
- * @param {{seed: number, frames: number, gen: string}} opts
+ * @param {{seed: number, frames: number, gen: string, onCreate?: function(Object): void}} opts
+ *        onCreate: PikaPhysics 생성 직후·프레임 0 이전에 상태를 심는다 (표적 케이스 (d) 용).
+ *        ⚠️ RNG 는 이미 주입된 뒤이고 생성자가 rand() 를 소비한 뒤다. 여기서 rand() 를 쓰면 안 된다.
  * @param {function(Object, boolean, Array, number): void} onFrame
  *        (physics, isBallTouchingGround, inputs, frameIndex) — 리셋 **전** 상태로 호출된다
  */
-export function runEpisode({ seed, frames, gen }, onFrame) {
+export function runEpisode({ seed, frames, gen, onCreate }, onFrame) {
   // RNG 주입은 반드시 생성자 호출보다 먼저. Player 생성자가 이미 rand() 를 소비한다.
   const physicsRng = xorshift32(seed);
   setCustomRng(toCustomRng(physicsRng));
@@ -59,6 +61,7 @@ export function runEpisode({ seed, frames, gen }, onFrame) {
   const byComputer = isComputerControlled(gen);
 
   const physics = new PikaPhysics(byComputer, byComputer);
+  if (onCreate !== undefined) onCreate(physics);
   const inputs = [new PikaUserInput(), new PikaUserInput()];
 
   for (let f = 0; f < frames; f++) {

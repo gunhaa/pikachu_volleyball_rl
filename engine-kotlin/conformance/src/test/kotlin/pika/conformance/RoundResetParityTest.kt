@@ -29,8 +29,9 @@ class RoundResetParityTest {
         assumeTrue(RepoPaths.upstreamIsPresent(), "upstream/ 이 없습니다 (scripts/fetch-upstream.sh)")
     }
 
+    // TARGETED 는 시드 축이 다르다 (시드 = 케이스 번호, 프레임 수도 케이스가 정한다).
     @ParameterizedTest(name = "{0}")
-    @EnumSource(Generator::class)
+    @EnumSource(value = Generator::class, names = ["TARGETED"], mode = EnumSource.Mode.EXCLUDE)
     @DisplayName("라운드 리셋 50시드 × 20회가 JS 와 완전히 일치한다")
     fun resetParity(gen: Generator) {
         val result = Lockstep(frames = 20, gen = gen, probeResets = true).run("1..50")

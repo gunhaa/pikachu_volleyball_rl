@@ -19,6 +19,10 @@ object RepoPaths {
     val oracleScript: Path get() = oracleDir.resolve("run.mjs")
     val upstreamPhysics: Path get() = root.resolve("upstream/src/resources/js/physics.js")
 
+    /** 표적 케이스 표. JS 오라클과 **같은 파일**을 읽는다 (plan.md §6.4). */
+    val targetedCases: Path get() = root.resolve("tools/targeted-cases.txt")
+
+
     /** 업스트림이 받아져 있는가. 없으면 오라클을 돌릴 수 없다. */
     fun upstreamIsPresent(): Boolean = Files.exists(upstreamPhysics)
 }

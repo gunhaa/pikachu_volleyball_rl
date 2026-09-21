@@ -17,10 +17,27 @@ enum class Generator(val cliName: String) {
     UNIFORM("uniform"),
     BIASED("biased"),
     FSM("fsm"),
+
+    /**
+     * (d) 표적 케이스. 다른 셋과 층위가 다르다 — 입력을 만드는 규칙이 아니라
+     * **초기 상태를 심는 케이스 목록**이고, 입력은 각 케이스가 지정한 기본 생성기가 만든다.
+     *
+     * 이 값으로는 [fill] 도 [isComputerControlled] 도 호출되지 않는다.
+     * `--gen targeted` 경로는 [Harness.runTargetedCase] 로 갈라져 케이스의 기본 생성기를 쓴다.
+     */
+    TARGETED("targeted"),
     ;
 
+    /** 표적 케이스의 **기본** 생성기로 쓸 수 있는가. 표적이 표적을 가리킬 수는 없다. */
+    val isBaseGenerator: Boolean get() = this != TARGETED
+
     /** FSM 모드에서는 엔진이 `letComputerDecideUserInput` 으로 입력을 덮어쓴다. */
-    val isComputerControlled: Boolean get() = this == FSM
+    val isComputerControlled: Boolean
+        get() = when (this) {
+            FSM -> true
+            UNIFORM, BIASED -> false
+            TARGETED -> error("TARGETED 는 케이스마다 다르다. Harness.runTargetedCase 를 쓰세요.")
+        }
 
     companion object {
         fun of(cliName: String): Generator =
@@ -41,6 +58,7 @@ internal object InputGenerators {
             Generator.UNIFORM -> fillUniform(rng, inputs)
             Generator.BIASED -> fillBiased(rng, inputs, physics)
             Generator.FSM -> Unit // 입력 스트림에서 draw 하지 않는다
+            Generator.TARGETED -> error("TARGETED 는 케이스의 기본 생성기로 대체된다")
         }
     }
 

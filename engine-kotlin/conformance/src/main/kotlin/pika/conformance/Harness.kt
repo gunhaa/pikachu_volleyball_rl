@@ -38,12 +38,15 @@ object Harness {
     /**
      * 에피소드 하나를 돌린다.
      *
+     * @param onCreate [PikaPhysics] 생성 직후·프레임 0 이전에 상태를 심는다 (표적 케이스 (d) 용).
+     *   ⚠️ RNG 는 이미 주입된 뒤이고 생성자가 `rand()` 를 소비한 뒤다. 여기서 `rand()` 를 쓰면 안 된다.
      * @param onFrame (physics, isBallTouchingGround, inputs, frameIndex) — 리셋 **전** 상태로 호출된다
      */
     fun runEpisode(
         seed: Int,
         frames: Int,
         gen: Generator,
+        onCreate: (PikaPhysics) -> Unit = {},
         onFrame: (PikaPhysics, Boolean, Array<PikaUserInput>, Int) -> Unit,
     ) {
         // RNG 주입은 반드시 생성자 호출보다 먼저. Player 생성자가 이미 rand() 를 소비한다.
@@ -54,6 +57,7 @@ object Harness {
         val byComputer = gen.isComputerControlled
 
         val physics = PikaPhysics(byComputer, byComputer, rand)
+        onCreate(physics)
         val inputs = arrayOf(PikaUserInput(), PikaUserInput())
 
         for (f in 0 until frames) {
@@ -67,6 +71,22 @@ object Harness {
                 resetRound(physics, nextServeIsPlayer2(physics.ball))
             }
         }
+    }
+
+    /**
+     * 표적 케이스 하나를 돌린다. (plan.md §6.4)
+     *
+     * 케이스 번호가 하네스의 "시드" 자리에 들어간다. 프레임 수·입력 생성기·초기 상태는
+     * `tools/targeted-cases.txt` 가 정하고, JS 오라클도 **같은 파일**을 읽는다.
+     *
+     * @param index 케이스 번호 (1-based)
+     */
+    fun runTargetedCase(
+        index: Int,
+        onFrame: (PikaPhysics, Boolean, Array<PikaUserInput>, Int) -> Unit,
+    ) {
+        val case = TargetedCases.at(index)
+        runEpisode(case.seed, case.frames, case.gen, TargetedCases.setupFor(case), onFrame)
     }
 
     /**

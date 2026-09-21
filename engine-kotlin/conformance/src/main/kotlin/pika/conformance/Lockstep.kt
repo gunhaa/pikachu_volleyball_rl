@@ -80,10 +80,14 @@ class Lockstep(
                     }
                 }
 
-                if (probeResets) {
-                    Harness.runResetProbe(seed, frames, gen) { physics, i -> compare(physics, false, i) }
-                } else {
-                    Harness.runEpisode(seed, frames, gen) { physics, touching, _, f -> compare(physics, touching, f) }
+                when {
+                    probeResets ->
+                        Harness.runResetProbe(seed, frames, gen) { physics, i -> compare(physics, false, i) }
+                    // 표적 모드에서는 시드가 케이스 번호이고 프레임 수도 케이스가 정한다.
+                    gen == Generator.TARGETED ->
+                        Harness.runTargetedCase(seed) { physics, touching, _, f -> compare(physics, touching, f) }
+                    else ->
+                        Harness.runEpisode(seed, frames, gen) { physics, touching, _, f -> compare(physics, touching, f) }
                 }
 
                 if (mismatch != null) {
@@ -212,9 +216,17 @@ object Drilldowns {
         // Kotlin 쪽 같은 구간을 다시 돌린다.
         val ktStates = HashMap<Int, IntArray>()
         val ints = IntArray(StateSpec.intCount(m.strict))
-        Harness.runEpisode(m.seed, upTo, m.gen) { physics, touching, _, f ->
-            StateSpec.writeInts(physics, touching, m.strict, ints)
-            ktStates[f] = ints.copyOf()
+        val record = { physics: PikaPhysics, touching: Boolean, f: Int ->
+            if (f <= m.frame) {
+                StateSpec.writeInts(physics, touching, m.strict, ints)
+                ktStates[f] = ints.copyOf()
+            }
+        }
+        if (m.gen == Generator.TARGETED) {
+            // 케이스는 프레임 수를 스스로 정하므로 upTo 로 자를 수 없다. 넘치는 프레임은 버린다.
+            Harness.runTargetedCase(m.seed) { physics, touching, _, f -> record(physics, touching, f) }
+        } else {
+            Harness.runEpisode(m.seed, upTo, m.gen) { physics, touching, _, f -> record(physics, touching, f) }
         }
 
         val names = StateSpec.fieldNames(m.strict)

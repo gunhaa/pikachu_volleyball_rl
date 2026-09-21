@@ -11,18 +11,31 @@ import kotlin.system.exitProcess
  *   ./gradlew conformance                                  # plan.md §6.3 전량
  *   ./gradlew conformance --args="--gen uniform --seeds 1..100"
  *   ./gradlew conformance --args="--strict"
+ *   ./gradlew conformance --args="--gen targeted"      # 표적 케이스만
  */
 object Main {
 
     /** plan.md §6.3 의 배분. 커버리지가 부족하면 주저 없이 늘린다. */
-    private val FULL_PLAN = listOf(
-        Batch(Generator.UNIFORM, "1..3000", 600),
-        Batch(Generator.BIASED, "1..2000", 600),
-        Batch(Generator.FSM, "1..2000", 600),
-    )
+    private val FULL_PLAN: List<Batch> by lazy {
+        listOf(
+            Batch(Generator.UNIFORM, "1..3000", 600),
+            Batch(Generator.BIASED, "1..2000", 600),
+            Batch(Generator.FSM, "1..2000", 600),
+            targetedBatch(),
+        )
+    }
+
+    /** (d) 표적 케이스. 시드가 케이스 번호이고 프레임 수는 케이스마다 다르다. */
+    private fun targetedBatch(seeds: String? = null) =
+        Batch(Generator.TARGETED, seeds ?: TargetedCases.allSeedSpec(), 0)
 
     data class Batch(val gen: Generator, val seeds: String, val frames: Int) {
-        val frameCount: Long get() = Lockstep.parseSeeds(seeds).size.toLong() * frames
+        val frameCount: Long
+            get() = if (gen == Generator.TARGETED) {
+                Lockstep.parseSeeds(seeds).sumOf { TargetedCases.at(it).frames.toLong() }
+            } else {
+                Lockstep.parseSeeds(seeds).size.toLong() * frames
+            }
     }
 
     @JvmStatic
@@ -56,10 +69,13 @@ object Main {
         }
 
         StateSpec.assertMatchesProto()
+        TargetedCases.assertFieldsMatchSpec()
 
         val batches = when {
+            gen == Generator.TARGETED -> listOf(targetedBatch(seeds))
             gen != null -> listOf(Batch(gen, seeds ?: "1..100", frames))
-            seeds != null -> Generator.entries.map { Batch(it, seeds, frames) }
+            // --seeds 만 준 경우: 표적 케이스는 시드 축이 다르므로 빼고 돈다.
+            seeds != null -> Generator.entries.filter { it.isBaseGenerator }.map { Batch(it, seeds, frames) }
             else -> FULL_PLAN
         }
 
@@ -71,7 +87,11 @@ object Main {
         val startedAll = System.nanoTime()
 
         for (batch in batches) {
-            val label = "${batch.gen.cliName} seeds=${batch.seeds} T=${batch.frames}"
+            val label = if (batch.gen == Generator.TARGETED) {
+                "${batch.gen.cliName} cases=${batch.seeds}"
+            } else {
+                "${batch.gen.cliName} seeds=${batch.seeds} T=${batch.frames}"
+            }
             print("  $label ... ")
             System.out.flush()
 

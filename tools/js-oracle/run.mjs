@@ -33,6 +33,10 @@ import {
 } from './spec.mjs';
 import { runEpisode, runResetProbe } from './harness.mjs';
 import { GENERATORS, GEN_UNIFORM } from './inputs.mjs';
+import { GEN_TARGETED, caseAt, loadCases, setupFor } from './targeted.mjs';
+
+/** `--gen targeted` 는 시드 자리에 **케이스 번호**를 받는다. 프레임 수는 케이스가 정한다. */
+const ALL_GENERATORS = [...GENERATORS, GEN_TARGETED];
 
 const MODES = ['frame-hash', 'chain-hash', 'full', 'reset-probe'];
 
@@ -73,8 +77,11 @@ function parseArgs(argv) {
     } else throw new Error(`알 수 없는 인자: ${a}`);
   }
   if (!MODES.includes(opts.mode)) throw new Error(`--mode 는 ${MODES.join('|')} 중 하나여야 합니다`);
-  if (!GENERATORS.includes(opts.gen)) throw new Error(`--gen 은 ${GENERATORS.join('|')} 중 하나여야 합니다`);
-  if (!Number.isInteger(opts.frames) || opts.frames <= 0) throw new Error('--frames 는 양의 정수');
+  if (!ALL_GENERATORS.includes(opts.gen)) throw new Error(`--gen 은 ${ALL_GENERATORS.join('|')} 중 하나여야 합니다`);
+  // 표적 모드에서는 프레임 수를 케이스가 정하므로 --frames 를 보지 않는다.
+  if (opts.gen !== GEN_TARGETED && (!Number.isInteger(opts.frames) || opts.frames <= 0)) {
+    throw new Error('--frames 는 양의 정수');
+  }
   return opts;
 }
 
@@ -87,7 +94,10 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const counts = assertMatchesProto(); // 필드 순서가 .proto 와 같은지 먼저 확인
 
-  const seeds = parseSeeds(opts.seeds);
+  const targeted = opts.gen === GEN_TARGETED;
+  const seeds = targeted && opts.seeds === '1..10'
+    ? loadCases().map((_, i) => i + 1) // 기본값이면 전체 케이스
+    : parseSeeds(opts.seeds);
   const intCount = counts.base + (opts.strict ? counts.sound : 0);
   const buf = Buffer.allocUnsafe(intCount * 4);
 
@@ -95,7 +105,7 @@ async function main() {
     spec: 'v1',
     mode: opts.mode,
     gen: opts.gen,
-    frames: opts.frames,
+    frames: targeted ? 0 : opts.frames, // 표적 모드의 0 = "케이스마다 다름"（소비자와 맞춰둔 약속）
     strict: opts.strict,
     seedCount: seeds.length,
     intCount,
@@ -143,6 +153,10 @@ async function main() {
         emit(physics, false, [{ xDirection: 0, yDirection: 0, powerHit: 0 },
                               { xDirection: 0, yDirection: 0, powerHit: 0 }], i)
       );
+    } else if (targeted) {
+      // 시드 = 케이스 번호. 프레임 수·입력 생성기·초기 상태를 케이스가 정한다.
+      const c = caseAt(seed);
+      runEpisode({ seed: c.seed, frames: c.frames, gen: c.gen, onCreate: setupFor(c) }, emit);
     } else {
       runEpisode({ seed, frames: opts.frames, gen: opts.gen }, emit);
     }
