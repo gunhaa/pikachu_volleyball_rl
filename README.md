@@ -72,14 +72,35 @@ cd tools/js-oracle && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON selfch
 ### 4. 차분 테스트
 
 ```bash
-./gradlew conformance                                     # plan.md §6.3 전량 (약 4.2M 프레임)
+./gradlew conformance                                     # 전량 — 7,015 에피소드 / 4.2M 프레임 / 약 18초
 ./gradlew conformance --args="--gen fsm --seeds 1..100"   # 일부만
+./gradlew conformance --args="--gen targeted"             # 표적 케이스만 (tools/targeted-cases.txt)
 ./gradlew conformance --args="--reset-probe"              # 엔진 없이 하네스만 검증
 ./gradlew conformance --args="--strict"                   # sound 필드까지 포함
 ```
 
+현재 상태: **4,202,280 프레임 전수 일치, 불일치 0건** (엄격 모드 포함).
+
 전수 검사는 Node 와 `upstream/` 이 필요하므로 `build` 에 포함하지 않는다.
-CI 는 축소 샘플의 체인 해시 골든 회귀만 본다.
+CI 는 축소 샘플(615 에피소드)의 체인 해시 골든 회귀만 보고, 이쪽은 **Node 없이** 돈다.
+
+```bash
+./gradlew conformance --args="--write-golden"   # 골든 재생성 (JS 오라클에서 새로 받는다)
+```
+
+> ⚠️ 골든이 깨졌다고 재생성하면 안 된다. 그건 검증을 통과시키는 게 아니라 무력화하는 것이다.
+> 먼저 전수 차분으로 원인을 찾는다.
+
+### 5. 커버리지
+
+```bash
+cd tools/js-oracle && npm install     # 최초 1회 (c8)
+./scripts/coverage.sh                 # 생성기당 300 시드 + 표적 케이스 전체
+./scripts/coverage.sh 1..1000         # 시드 범위 지정
+```
+
+`physics.js` 의 분기 커버리지를 잰다. 현재 **문장·분기·함수·줄 전부 100%**.
+HTML 리포트는 `coverage/index.html` 에 나온다.
 
 ---
 
@@ -89,9 +110,12 @@ CI 는 축소 샘플의 체인 해시 골든 회귀만 본다.
 proto/state_spec.proto      차분 테스트가 비교하는 상태의 단일 정의 (계약)
 scripts/fetch-upstream.sh   업스트림 고정 커밋 fetch
 tools/js-oracle/            Node 오라클 — physics.js 를 정답으로 돌린다
+tools/targeted-cases.txt    표적 케이스 표 — JS·Kotlin 이 함께 읽는다
+scripts/coverage.sh         physics.js 커버리지 측정
 engine-kotlin/
   core/                     physics.js 포팅 (외부 의존성 0)
   conformance/              차분 테스트 하네스 + 실행기
+    golden/chain-hashes.txt CI 골든 회귀용 체인 해시 (커밋 대상)
 trainer-python/             PPO 트레이너 (현재는 골격)
 ```
 
@@ -111,4 +135,5 @@ Python 이었다면 `//` 가 floor division 이라 `-5 // 2 == -3` 으로 갈라
 (그 차이를 고정해 둔 것이 `trainer-python/src/pika_trainer/intsem.py` 다).
 
 부동소수점 반올림 차이가 원천적으로 없으므로, 같은 입력에 같은 숫자가 나오고
-같은 숫자면 같은 해시가 나온다. 이것이 상태 해시 100% 일치를 목표로 걸 수 있는 근거다.
+같은 숫자면 같은 해시가 나온다. 이것이 상태 해시 100% 일치를 목표로 걸 수 있는 근거였고,
+실제로 4,202,280 프레임에서 불일치 0건으로 확인되었다.

@@ -6,7 +6,7 @@
 |---|---|---|---|
 | 1 | RL binary 로 FSM(컴퓨터)을 이긴다 | Track A | vs FSM 승률 ≥ 90% |
 | 2 | zero 학습으로 AI 끼리 대전시킨다 | Track B | 학습 중 FSM 미사용 |
-| 3 | 그 결과로 다시 FSM 과 대전한다 | Track B 평가 | vs FSM 승률 ≥ 70% (held-out) |
+| 3 | 그 결과로 다시 FSM 과 대전한다 | Track B 평가 | vs FSM 승률 ≥ 70% (held-out) | | |
 
 - **Track A**: 랜덤 초기화 → FSM 상대로 학습.
 - **Track B**: 랜덤 초기화 → 자기 자신/과거 체크포인트하고만 학습. **FSM 을 학습 중 한 번도 보지 않는다.**
@@ -81,27 +81,44 @@
 
 ## Phase
 
-| Phase | 목표 | 산출 구성품 | 완료 조건 |
-|---|---|---|---|
-| **0** | 저장소 기반과 빌드 골격 | `.gitignore`, `README.md`, `scripts/`, Gradle/uv 골격, CI | `gradlew build` · `pytest` 통과 |
-| **1** | 물리 엔진 동치성 확보 | `core`, `conformance`, `proto`(State Spec) | 상태 해시 100% 일치, 분기 커버리지 ≥ 95% |
-| **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 |
-| **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) |
-| **4** | Track B — zero 셀프플레이 | `track_b.py`, `league.py` | vs FSM 승률 ≥ 70% (held-out) |
-| **5** | 두 트랙 비교 | 비교 리포트 | A vs B 대결 + 학습 곡선 분석 완료 |
-| **6** | 분석과 리플레이 | `analysis`, MySQL 스키마, `viewer-web` | 임의 경기를 브라우저에서 재현 |
-| **7** | 수평 확장 | `deploy/k3s`, (필요 시) ONNX rollout | replica 증가 시 처리량 선형 증가 |
+| Phase | 목표 | 산출 구성품 | 완료 조건 | 상태 |
+|---|---|---|---|---|
+| **0** | 저장소 기반과 빌드 골격 | `.gitignore`, `README.md`, `scripts/`, Gradle/uv 골격, CI | `gradlew build` · `pytest` 통과 | ✅ 2026-09-21 |
+| **1** | 물리 엔진 동치성 확보 | `core`, `conformance`, `proto`(State Spec) | 상태 해시 100% 일치, 분기 커버리지 ≥ 95% | ✅ 2026-09-21 |
+| **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | |
+| **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) | |
+| **4** | Track B — zero 셀프플레이 | `track_b.py`, `league.py` | vs FSM 승률 ≥ 70% (held-out) | |
+| **5** | 두 트랙 비교 | 비교 리포트 | A vs B 대결 + 학습 곡선 분석 완료 | |
+| **6** | 분석과 리플레이 | `analysis`, MySQL 스키마, `viewer-web` | 임의 경기를 브라우저에서 재현 | |
+| **7** | 수평 확장 | `deploy/k3s`, (필요 시) ONNX rollout | replica 증가 시 처리량 선형 증가 | |
 
 ### Phase 0 — 저장소 기반
 
 저장소 규칙(라이선스 대응 포함)과 Kotlin/Python 빌드 골격을 세운다.
 업스트림은 고정 커밋으로 받아오되 커밋하지 않는다.
 
-### Phase 1 — 물리 엔진 포팅 + 차분 테스트
+### Phase 1 — 물리 엔진 포팅 + 차분 테스트 ✅
 
 `physics.js` 를 Kotlin 으로 포팅하고, JS 를 정답으로 둔 차분 테스트로 동치성을 증명한다.
 **이 Phase 가 실패하면 이후 모든 학습 결과가 "원본과 다른 게임"의 결과가 된다.**
-상태 해시로 전수 비교하고, 불일치 시 체인 해시 이분 탐색으로 최초 불일치 프레임을 특정한다.
+lockstep 프레임별 해시로 전수 비교하므로 첫 불일치 프레임이 탐색 없이 즉시 나온다.
+
+**결과 (2026-09-21)** — `history/2026-09-21-engine-port/`
+
+| 지표 | 결과 |
+|---|---|
+| 상태 해시 일치율 | **100%** — 4,202,280 프레임 / 불일치 0건 (엄격 모드 포함) |
+| `physics.js` 커버리지 | **100%** — 문장·분기·함수·줄 전부 |
+| CI 회귀 | 615 에피소드 체인 해시 커밋, **Node 없이** 검증 |
+
+이후 Phase 가 기대도 되는 것
+
+- `pika.core` 의 `PikaPhysics.runEngineForNextFrame` 이 원본과 동치임이 증명되어 있다.
+  Phase 2 의 `env` 는 이 위에 관측/행동/보상만 얹으면 된다.
+- **FSM(`letComputerDecideUserInput`) 도 동치다.** Track A 의 승률과 Track B 의
+  held-out 평가가 의미를 가지는 근거가 여기에 있다.
+- 물리를 건드리는 변경은 `./gradlew build` 의 골든 회귀가 잡는다.
+  깨졌을 때 골든을 재생성하는 것은 검증을 무력화하는 것이다 — 전수 차분으로 원인을 찾는다.
 
 ### Phase 2 — RL 환경 + gRPC
 
