@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# CI 는 업스트림(`upstream/`)을 클론하지 않는다.
+# 전수 차분 검사는 Node 오라클이 필요하므로 로컬에서 돌리고,
+# CI 는 축소 샘플의 체인 해시 골든 회귀만 본다. (NFR-2, plan.md §5.4)
+
+jobs:
+  kotlin:
+    name: Kotlin — gradlew build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew build --stacktrace
+
+  python:
+    name: Python — pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trainer-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --locked
+
+      - run: uv run pytest

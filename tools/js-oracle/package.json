@@ -1,0 +1,10 @@
+{
+  "name": "pika-js-oracle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "physics.js 를 정답(oracle)으로 돌려 프레임별 상태 해시를 뱉는다",
+  "scripts": {
+    "selfcheck": "node selfcheck.mjs"
+  }
+}

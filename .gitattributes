@@ -1,0 +1,17 @@
+# 기본: 텍스트는 저장소에 LF 로 정규화한다.
+* text=auto eol=lf
+
+# Gradle wrapper — 플랫폼별 줄바꿈을 지켜야 실행된다.
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+gradlew      text eol=lf
+*.sh         text eol=lf
+
+# 바이너리
+*.jar        binary
+*.png        binary
+*.wav        binary
+*.mp3        binary
+*.pt         binary
+*.pth        binary
+*.onnx       binary

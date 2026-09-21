@@ -1,0 +1,121 @@
+// State Spec v1 — 차분 테스트가 비교하는 "게임 상태"의 단일 정의.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 이 파일의 지위
+// ─────────────────────────────────────────────────────────────────────────────
+// 이것은 계약(contract)이다. JS 오라클과 Kotlin 포팅본이 같은 순서로 같은 필드를
+// 직렬화해야 해시가 같아진다. 양쪽 구현은 이 파일에서 코드를 생성하지 않는다
+// (core 는 외부 의존성 0 이어야 한다 — NFR-1). 대신 양쪽 테스트가 이 파일을
+// 파싱해 자기 필드 목록과 대조한다. 어긋나면 테스트가 실패한다.
+//
+// ⚠️ 해시가 안 맞는다고 이 파일을 고치면 안 된다. 그것은 검증을 통과시키는 게
+//    아니라 무력화하는 것이다. 고칠 곳은 언제나 포팅 코드 쪽이다. (plan.md §5.0)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 직렬화 규약
+// ─────────────────────────────────────────────────────────────────────────────
+// protobuf 인코딩을 쓰지 않는다. 필드 번호 순서대로 값을 늘어놓은 고정 폭 배열이다.
+//
+//   1. 아래 메시지들을 FrameState 의 필드 번호 순서로 평탄화한다 (중첩 메시지는
+//      그 자리에서 자기 필드 번호 순서로 펼쳐진다).
+//   2. 각 값을 int32 little-endian 4바이트로 쓴다.
+//   3. bool 은 false=0, true=1 로 고정 인코딩한다. 언어별 bool 표현 차이를 차단한다.
+//      (그래서 이 파일에는 bool 타입이 없다. 전부 int32 다.)
+//   4. 이어붙인 바이트열에 SHA-256 을 적용한다.
+//   5. 스트리밍 비교용 해시는 그 다이제스트의 **앞 8바이트를 hex 16자**로 절단한다.
+//      (plan.md §6.3 — 4.2M 회 비교에서 충돌 확률 약 2e-13)
+//
+// 해시 두 종류 (plan.md §5.4)
+//   - 프레임별 해시: SHA256(state_n) 절단      → 개발 루프 · 전수 차분 검사
+//   - 체인 해시:     h_n = SHA256(h_{n-1} ‖ state_n) → CI 골든 회귀
+//     체인 해시는 절단하지 않은 32바이트 다이제스트를 이어 쓴다. h_{-1} 은 32바이트 0 이다.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 비교 모드
+// ─────────────────────────────────────────────────────────────────────────────
+//   기본 모드 : FrameState 만 직렬화한다.
+//   엄격 모드 : FrameState 뒤에 SoundSuffix 를 이어붙인다.
+//               sound 는 렌더링 전용이라 물리에 영향이 없지만 물리 엔진이 세팅하는
+//               값이므로, 포팅 누락을 잡기 위해 옵션으로 검사한다.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 제외한 것과 그 이유
+// ─────────────────────────────────────────────────────────────────────────────
+//   Player.isPlayer2, Player.isComputer
+//     생성자에서 정해진 뒤 변하지 않는 설정값이다. 상태가 아니다.
+//     (하네스가 양쪽에 같은 값을 주었는지는 에피소드 시작 시 따로 확인한다.)
+
+syntax = "proto3";
+
+package pika.spec;
+
+// 프레임 1개의 비교 대상 전체. 직렬화는 이 필드 번호 순서를 따른다.
+message FrameState {
+  BallState ball = 1;
+  PlayerState player1 = 2;
+  PlayerState player2 = 3;
+
+  // physicsEngine() 의 반환값.
+  //
+  // plan.md §5.1 의 원안에는 없었으나 추가했다. 이유는 두 가지다.
+  //   (1) 하네스의 라운드 리셋 트리거다. 이 값이 갈라지면 다음 프레임부터
+  //       양쪽이 다른 랠리를 진행하게 되어 불일치 원인이 흐려진다.
+  //   (2) 포함하면 검사가 더 엄격해질 뿐 느슨해지지 않는다.
+  int32 is_ball_touching_ground = 4;  // bool → 0/1
+}
+
+// physics.js 의 Ball. sound 제외.
+message BallState {
+  int32 x = 1;
+  int32 y = 2;
+  int32 x_velocity = 3;
+  int32 y_velocity = 4;
+  int32 fine_rotation = 5;
+  int32 rotation = 6;                    // 5 에 고착되면 hyper ball 글리치
+  int32 punch_effect_radius = 7;
+  int32 punch_effect_x = 8;
+  int32 punch_effect_y = 9;
+  int32 is_power_hit = 10;               // bool → 0/1
+  int32 expected_landing_point_x = 11;
+  int32 previous_x = 12;
+  int32 previous_previous_x = 13;
+  int32 previous_y = 14;
+  int32 previous_previous_y = 15;
+}
+
+// physics.js 의 Player. sound, isPlayer2, isComputer 제외.
+message PlayerState {
+  int32 x = 1;
+  int32 y = 2;
+  int32 y_velocity = 3;
+  int32 state = 4;                       // 0 normal, 1 jumping, 2 jumping_and_power_hitting,
+                                         // 3 diving, 4 lying_down_after_diving, 5 win, 6 lost
+  int32 frame_number = 5;
+  int32 diving_direction = 6;            // -1 left, 0 none, 1 right
+  int32 lying_down_duration_left = 7;
+  int32 is_collision_with_ball_happened = 8;   // bool → 0/1
+  int32 normal_status_arm_swing_direction = 9;
+  int32 delay_before_next_frame = 10;
+  int32 computer_boldness = 11;          // 라운드마다 rand() % 5 로 재추첨 → RNG 동기화 검증
+  int32 computer_where_to_stand_by = 12;
+  int32 is_winner = 13;                  // bool → 0/1
+  int32 game_ended = 14;                 // bool → 0/1
+}
+
+// 엄격 모드에서만 FrameState 뒤에 이어붙인다.
+message SoundSuffix {
+  BallSound ball = 1;
+  PlayerSound player1 = 2;
+  PlayerSound player2 = 3;
+}
+
+message BallSound {
+  int32 power_hit = 1;                   // bool → 0/1
+  int32 ball_touches_ground = 2;         // bool → 0/1
+}
+
+message PlayerSound {
+  int32 pipikachu = 1;                   // bool → 0/1
+  int32 pika = 2;                        // bool → 0/1
+  int32 chu = 3;                         // bool → 0/1
+}
