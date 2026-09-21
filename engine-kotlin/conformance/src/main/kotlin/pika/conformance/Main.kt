@@ -12,6 +12,7 @@ import kotlin.system.exitProcess
  *   ./gradlew conformance --args="--gen uniform --seeds 1..100"
  *   ./gradlew conformance --args="--strict"
  *   ./gradlew conformance --args="--gen targeted"      # 표적 케이스만
+ *   ./gradlew conformance --args="--write-golden"      # CI 골든 재생성
  */
 object Main {
 
@@ -45,11 +46,14 @@ object Main {
         var frames = 600
         var strict = false
         var probeResets = false
+        var writeGolden = false
 
         var i = 0
         while (i < argv.size) {
             when (val a = argv[i]) {
                 "--strict" -> strict = true
+                // 골든 값은 JS 오라클에서 새로 받는다. ⚠️ 깨졌다고 재생성하지 말 것.
+                "--write-golden" -> writeGolden = true
                 // 엔진을 돌리지 않고 라운드 리셋만 대조한다. 포팅 전에도 초록이 나와야 한다.
                 "--reset-probe" -> probeResets = true
                 "--gen" -> gen = Generator.of(argv[++i])
@@ -70,6 +74,14 @@ object Main {
 
         StateSpec.assertMatchesProto()
         TargetedCases.assertFieldsMatchSpec()
+
+        if (writeGolden) {
+            println("골든 체인 해시를 JS 오라클에서 새로 받습니다 → ${RepoPaths.goldenChainHashes}")
+            val entries = Golden.write { println("  $it ...") }
+            println("─".repeat(72))
+            println("에피소드 ${"%,d".format(entries.size)}개 기록 완료")
+            return
+        }
 
         val batches = when {
             gen == Generator.TARGETED -> listOf(targetedBatch(seeds))

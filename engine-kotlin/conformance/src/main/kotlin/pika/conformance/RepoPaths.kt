@@ -22,6 +22,8 @@ object RepoPaths {
     /** 표적 케이스 표. JS 오라클과 **같은 파일**을 읽는다 (plan.md §6.4). */
     val targetedCases: Path get() = root.resolve("tools/targeted-cases.txt")
 
+    /** CI 골든 회귀용 체인 해시. 커밋 대상이다 (NFR-2). */
+    val goldenChainHashes: Path get() = root.resolve("engine-kotlin/conformance/golden/chain-hashes.txt")
 
     /** 업스트림이 받아져 있는가. 없으면 오라클을 돌릴 수 없다. */
     fun upstreamIsPresent(): Boolean = Files.exists(upstreamPhysics)
