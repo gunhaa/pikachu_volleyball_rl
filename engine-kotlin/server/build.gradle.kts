@@ -1,6 +1,12 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.protobuf)
+    // installDist 로 실행 가능한 배포본을 만든다. Python 테스트와 Docker 이미지가 이것을 쓴다.
+    application
+}
+
+application {
+    mainClass.set("pika.server.EnvServer")
 }
 
 /**

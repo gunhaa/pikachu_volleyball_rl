@@ -46,6 +46,16 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
     private var vec: VectorEnv? = null
     private var config: EnvConfig? = null
 
+    /**
+     * 현재 구성의 세션 번호.
+     *
+     * 이 서버는 [VectorEnv] 를 하나만 들고 있다 — **단일 테넌트**다. 두 번째 클라이언트가
+     * `Configure` 하면 앞 구성은 사라지고, 앞 클라이언트는 아무 에러 없이 **모양이 다른
+     * 응답**을 받게 된다 (그리고 numpy reshape 에서야 터진다). 세션 번호는 그 사고를
+     * 조용하지 않게 만든다. 다중 테넌트로 갈 이유가 생기면 이 자리가 그 출발점이 된다.
+     */
+    private var sessionId = 0L
+
     private val startedAtNanos = System.nanoTime()
     private var stepNanos = 0L
     private var totalEnvSteps = 0L
@@ -83,6 +93,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                 v.reset()
                 vec = v
                 config = cfg
+                sessionId++
                 // 구성이 바뀌면 처리량 통계도 의미를 잃는다.
                 stepNanos = 0
                 totalEnvSteps = 0
@@ -95,6 +106,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                     .addAllObsFieldNames(ObsSpec.fieldNames(cfg.obs))
                     .addAllRewardTermNames(RewardTerms.NAMES)
                     .setActionCount(ActionCodec.ACTION_COUNT)
+                    .setSessionId(sessionId)
                     .build()
             }
         }
@@ -104,6 +116,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
         respond(responseObserver) {
             synchronized(lock) {
                 val v = requireConfigured()
+                requireSession(request.sessionId)
                 if (request.hasBaseSeed()) v.reset(request.baseSeed) else v.reset()
                 config = v.config
                 buildReply(v)
@@ -115,6 +128,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
         respond(responseObserver) {
             synchronized(lock) {
                 val v = requireConfigured()
+                requireSession(request.sessionId)
                 val expected = v.numEnvs * v.slotCount
                 val actions = request.actions
                 if (actions.size() != expected) {
@@ -156,6 +170,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                     //    대기 시간이 섞이면 서버가 느린지 클라이언트가 느린지 구별할 수 없다.
                     .setEnvStepsPerSec(if (stepNanos > 0) totalEnvSteps * 1e9 / stepNanos else 0.0)
                     .addAllRewardTermNames(RewardTerms.NAMES)
+                    .setSessionId(sessionId)
                     .build()
             }
         }
@@ -214,6 +229,18 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
         vec ?: throw Status.FAILED_PRECONDITION
             .withDescription("Configure 를 먼저 호출하세요")
             .asRuntimeException()
+
+    /** 0 은 "세션을 모름" 이다 — 옛 클라이언트나 손으로 찔러 보는 도구를 막지 않는다. */
+    private fun requireSession(id: Long) {
+        if (id != 0L && id != sessionId) {
+            throw Status.FAILED_PRECONDITION
+                .withDescription(
+                    "세션 $id 은 더 이상 유효하지 않습니다 (현재 $sessionId). " +
+                        "다른 클라이언트가 Configure 했습니다. 이 서버는 단일 테넌트입니다.",
+                )
+                .asRuntimeException()
+        }
+    }
 
     private fun invalidArgument(message: String) =
         Status.INVALID_ARGUMENT.withDescription(message).asRuntimeException()

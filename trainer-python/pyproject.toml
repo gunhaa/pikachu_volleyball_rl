@@ -2,14 +2,22 @@
 name = "pika-trainer"
 version = "0.0.0"
 description = "PPO trainer for Pikachu Volleyball RL (ROADMAP Phase 2+)"
-requires-python = ">=3.11"
-dependencies = []
+# numpy 2.5.x 가 3.12+ 를 요구한다. torch(Phase 3) 도 3.12 를 지원하므로 여기서 올린다.
+requires-python = ">=3.12"
+dependencies = [
+    "gymnasium>=1.3.0",
+    "grpcio>=1.84.0",
+    "numpy>=2.5.3",
+]
 
-# Phase 2 이후에 torch / gymnasium / grpcio 가 여기에 들어온다.
-# 이 작업(Phase 0~1)에서는 골격만 세운다.
+# torch 는 Phase 3 (PPO) 에서 들어온다. 지금 넣으면 CI 가 2GB 를 받는다.
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    # .proto → Python stub 생성기. 생성 결과는 커밋하고, 테스트가 최신인지 확인한다.
+    "grpcio-tools>=1.84.0",
+]
 
 [build-system]
 requires = ["hatchling"]

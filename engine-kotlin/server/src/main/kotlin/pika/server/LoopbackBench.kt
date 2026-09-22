@@ -47,7 +47,12 @@ object LoopbackBench {
 
             // 더미 행동. 정책 비용을 섞지 않는다 — 여기서 재는 것은 전송이다.
             val actions = EnvGolden.ActionSequence(1, numEnvs, reply.slotCount)
-            val request = { StepRequest.newBuilder().setActions(ByteString.copyFrom(actions.next())).build() }
+            val request = {
+                StepRequest.newBuilder()
+                    .setActions(ByteString.copyFrom(actions.next()))
+                    .setSessionId(reply.sessionId)
+                    .build()
+            }
 
             repeat(maxOf(20, steps / 10)) { stub.step(request()) }
 

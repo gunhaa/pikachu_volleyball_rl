@@ -226,6 +226,35 @@ class EnvServiceTest {
     }
 
     @Test
+    @DisplayName("두 번째 Configure 는 첫 세션을 무효화한다 — 단일 테넌트가 조용히 깨지지 않는다")
+    fun secondConfigureInvalidatesFirstSession() {
+        val first = configure(numEnvs = 4)
+        val second = configure(numEnvs = 8)
+        assertTrue(second.sessionId > first.sessionId, "Configure 마다 세션 번호가 올라간다")
+
+        // 낡은 세션으로 스텝하면 실패한다. 이것이 없으면 첫 클라이언트는 아무 에러 없이
+        // **모양이 다른 응답**을 받고, 한참 뒤 reshape 에서야 터진다.
+        val stale = assertThrows(StatusRuntimeException::class.java) {
+            stub.step(
+                StepRequest.newBuilder()
+                    .setActions(ByteString.copyFrom(ByteArray(4)))
+                    .setSessionId(first.sessionId)
+                    .build(),
+            )
+        }
+        assertEquals(Status.Code.FAILED_PRECONDITION, stale.status.code)
+
+        // 새 세션은 정상이다.
+        val ok = stub.step(
+            StepRequest.newBuilder()
+                .setActions(ByteString.copyFrom(ByteArray(8)))
+                .setSessionId(second.sessionId)
+                .build(),
+        )
+        assertEquals(8, ok.terminated.size())
+    }
+
+    @Test
     @DisplayName("관측 바이트는 float32 little-endian 이다 (np.frombuffer 와 같은 해석)")
     fun observationsAreLittleEndianFloat32() {
         val reply = configure(numEnvs = 1)
