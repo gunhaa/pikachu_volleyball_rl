@@ -64,3 +64,16 @@ tasks.register<JavaExec>("writeEnvGolden") {
     classpath = sourceSets["main"].runtimeClasspath
     systemProperty("repo.root", rootProject.projectDir.absolutePath)
 }
+
+/**
+ * (a) env 단독 처리량 측정. (M2-b, NFR-3)
+ *
+ * CI 에 넣지 않는다 — 머신마다 다른 숫자를 초록/빨강으로 판정하면 거짓 신호가 된다.
+ */
+tasks.register<JavaExec>("benchEnv") {
+    group = "verification"
+    description = "env 단독 처리량을 잰다 (gRPC 없음). 예산표와 함께 출력한다."
+    mainClass.set("pika.env.EnvBench")
+    classpath = sourceSets["main"].runtimeClasspath
+    systemProperty("repo.root", rootProject.projectDir.absolutePath)
+}
