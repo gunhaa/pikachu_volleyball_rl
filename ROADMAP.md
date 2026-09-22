@@ -69,10 +69,8 @@
 
 ## 제약
 
-- **업스트림 라이선스 미부여.** `LICENSE` 없음, `package.json` 은 `UNLICENSED`, GitHub API `license: None`.
-  원작(1997) 저작권자는 SACHI SOFT / SAWAYAKAN Programmers, Satoshi Takenouchi.
-  → `upstream/` 은 커밋하지 않고 고정 커밋 fetch 스크립트로 받는다. 원작 에셋은 커밋 금지.
-  → 포팅본도 2차적 저작물이므로 라이선스 상황은 동일하다. 포팅의 근거는 성능과 아키텍처다.
+- **업스트림은 커밋하지 않는다.** `upstream/` 과 게임 에셋은 `.gitignore` 로 차단하고,
+  고정 커밋 `0d04dbaf` 을 `scripts/fetch-upstream.sh` 로 받는다. 오라클 실행에 필요하다.
 - **`physics.js` 는 전부 32비트 정수 연산.** 나눗셈 7곳 전부 `| 0` 절삭, `Math` 는 `abs` 뿐,
   소수점 리터럴 0건. 포팅 시 `Long` 이 아닌 `Int` 를 써야 `| 0` 의 래핑 동작까지 일치한다.
 - **게임 FPS 25, 승점 15.** 에피소드는 랠리 단위, 게임 단위는 평가에만 사용.
@@ -94,7 +92,7 @@
 
 ### Phase 0 — 저장소 기반
 
-저장소 규칙(라이선스 대응 포함)과 Kotlin/Python 빌드 골격을 세운다.
+저장소 규칙과 Kotlin/Python 빌드 골격을 세운다.
 업스트림은 고정 커밋으로 받아오되 커밋하지 않는다.
 
 ### Phase 1 — 물리 엔진 포팅 + 차분 테스트 ✅

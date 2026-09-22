@@ -1,6 +1,6 @@
 # pikachu-volleyball-rl
 
-피카츄 발리볼을 강화학습으로 푸는 개인 학습용 프로젝트.
+피카츄 발리볼을 강화학습으로 푸는 프로젝트.
 
 물리 엔진을 Kotlin 으로 포팅하고, JS 원본을 정답(oracle)으로 둔 차분 테스트로
 동치성을 증명한 뒤, 그 위에서 PPO 로 정책을 학습한다.
@@ -13,25 +13,13 @@
 
 ---
 
-## ⚠️ 출처와 저작권
+## 업스트림
 
-이 저장소는 **원작 게임의 코드도 에셋도 포함하지 않는다.**
+포팅의 원본은 [`gorisanson/pikachu-volleyball`](https://github.com/gorisanson/pikachu-volleyball) 이다.
+고정 커밋 `0d04dbaf165e4131e26f27f6e9def766f62260b3` 을 `scripts/fetch-upstream.sh` 로 받아 쓴다.
 
-| 대상 | 권리자 |
-|---|---|
-| 원작 *Pikachu Volleyball* (1997) | SACHI SOFT / SAWAYAKAN Programmers, Satoshi Takenouchi |
-| JavaScript 리버스 엔지니어링 구현 | Kyutae Lee ([gorisanson/pikachu-volleyball](https://github.com/gorisanson/pikachu-volleyball)) |
-
-업스트림 저장소에는 `LICENSE` 파일이 없고 `package.json` 의 `license` 는 `UNLICENSED` 다.
-즉 **사용 허가가 명시적으로 부여된 적이 없다.** 따라서
-
-- 업스트림 코드는 저장소에 커밋하지 않는다. `scripts/fetch-upstream.sh` 로 고정 커밋을 받아 쓰고,
-  `upstream/` 은 `.gitignore` 로 차단한다.
-- 원작 스프라이트·효과음 등 게임 에셋은 어떤 경로로도 커밋하지 않는다.
-- Kotlin 포팅본 역시 2차적 저작물이므로 같은 제약을 따른다.
-
-이 프로젝트는 **비상업적 개인 학습·연구 목적**이며 배포·상업적 이용을 의도하지 않는다.
-원작 권리자의 요청이 있으면 즉시 따른다.
+**`upstream/` 과 게임 에셋은 저장소에 커밋하지 않는다.** `.gitignore` 가 차단한다.
+차분 테스트의 JS 오라클이 이 디렉터리를 필요로 하므로, 새 환경에서는 fetch 스크립트를 먼저 실행한다.
 
 ---
 
