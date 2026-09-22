@@ -56,6 +56,14 @@ class PikaGame(
         private set
 
     init {
+        // M2-g 런타임 불변식 (FR-14, plan.md §9).
+        // 슬롯 구성과 엔진의 isComputer 가 어긋나면 Track B 가 FSM 을 섞어 쓰게 된다.
+        // 그 오류는 승률이 이상해지기 전까지 드러나지 않으므로 여기서 즉시 막는다.
+        check(physics.player1.isComputer == slots.p1.isFsm && physics.player2.isComputer == slots.p2.isFsm) {
+            "슬롯 구성과 엔진의 isComputer 가 어긋났습니다: slots=$slots, " +
+                "isComputer=(${physics.player1.isComputer}, ${physics.player2.isComputer})"
+        }
+
         // Ball 생성자는 isPlayer2Serve = false 로 초기화한다.
         // 첫 서브가 오른쪽이면 여기서 다시 잡는다. ⚠️ ball 초기화는 RNG 를 소비하지 않으므로
         // 난수 스트림이 어긋나지 않는다 (Player 두 개만 생성자에서 rand() 를 썼다).

@@ -1,0 +1,166 @@
+// Obs Spec v1 — 정책이 보는 "관측" 의 단일 정의. (NFR-5)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 이 파일의 지위
+// ─────────────────────────────────────────────────────────────────────────────
+// 계약(contract)이다. `proto/state_spec.proto` 와 같은 방식으로 쓴다 —
+// **protobuf 인코딩은 쓰지 않는다.** 필드 번호 순서대로 float32 값을 늘어놓은
+// 고정 폭 배열의 순서를 정의할 뿐이다. 실제 전송은 `env.proto` 의 packed `bytes` 다.
+//
+// 소비자는 셋이다. 하나라도 어긋나면 정책이 엉뚱한 것을 보게 되고, 그것은
+// **조용히** 일어난다.
+//
+//   1. Kotlin  — engine-kotlin/env/.../ObsSpec.kt · ObsEncoder.kt (생산자)
+//   2. Python  — trainer-python/src/pika_trainer/obs_spec.py (소비자, 레이아웃 대조)
+//   3. (장래) JS — 학습된 정책을 원작 게임에 꽂을 때 (plan.md §12.3).
+//                 JS 는 Kotlin 코드를 읽지 않는다. 그래서 정규화 상수를 아래에
+//                 **숫자로** 박아 둔다. 레이아웃을 바꿀 사람이 JS 를 떠올리게 하려는
+//                 목적도 있다.
+//
+// 양쪽 구현은 이 파일에서 코드를 생성하지 않는다. 각자 자기 필드 목록을 들고 있되
+// 테스트가 이 파일과 대조한다. 어긋나면 실패한다.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 레이아웃
+// ─────────────────────────────────────────────────────────────────────────────
+// Observation 의 필드 번호 순서로 평탄화한다 (중첩 메시지는 그 자리에서 펼쳐진다).
+// 각 값은 float32 little-endian 4바이트다.
+//
+//   기본 구성: me 15 + opponent 15 + ball 6 + match 4 = **40 차원 (160 바이트)**
+//
+// 조건부 필드는 `@optional:<플래그>` 주석으로 표시한다. 플래그가 꺼지면 그 필드는
+// 배열에서 **빠지고** 뒤 필드가 앞으로 당겨진다.
+//
+//   obs_include_expected_landing = false → 39 차원
+//   obs_include_side_flag        = true  → 41 차원
+//
+// 레이아웃 해시 = SHA-256("\n" 으로 이은 활성 필드 이름 목록). 서버의 Health 가
+// 이 값을 돌려주고 클라이언트가 자기 값과 대조한다. 어긋난 서버에 붙으면 관측이
+// 조용히 뒤섞이는 대신 즉시 실패한다.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 시점 (egocentric) 과 미러링
+// ─────────────────────────────────────────────────────────────────────────────
+// `me` 는 이 슬롯이 조종하는 플레이어, `opponent` 는 상대다. 점수도 내 것이 먼저다.
+//
+// mirror_observations = true (기본) 이면 오른쪽 슬롯의 관측을 왼쪽 시점으로 뒤집는다.
+//   x            → 432 - x
+//   x_velocity   → -x_velocity
+//   diving_direction → -diving_direction
+//
+// ⚠️ 미러 축은 네트(216)인데 공의 가동 폭 [20, 432] 의 중심은 **226** 이다.
+//    즉 이 미러링은 **근사**이고, 그 10px 오차가 원작의 좌우 비대칭이다 (plan.md §2.2).
+//    감추지 않는다 — 평가는 언제나 양 진영에서 따로 보고한다 (FR-13).
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 정규화 상수 (JS 재구현용 — 숫자로 박아 둔다)
+// ─────────────────────────────────────────────────────────────────────────────
+// unit(v, lo, hi) = 2 * (v - lo) / (hi - lo) - 1     // [lo, hi] → [-1, 1]
+//
+//   me/opponent.x                     : unit(x, 32, 184)  왼쪽 진영 기준
+//                                       unit(x, 248, 400) 오른쪽 진영 기준
+//                                       (미러링 후의 진영으로 고른다)
+//   me/opponent.y                     : unit(y, 108, 244)
+//                                       108 = 244 - (1+2+...+16), 점프 최고점
+//   me/opponent.y_velocity            : v / 16
+//   me/opponent.state_is_*            : one-hot, state 0..6
+//   me/opponent.frame_number          : v / 5
+//   me/opponent.diving_direction      : 그대로 (-1, 0, 1)
+//   me/opponent.lying_down_duration_left : v / 3
+//   me/opponent.is_collision_*        : 0 또는 1
+//   me/opponent.delay_before_next_frame  : v / 5
+//   ball.x, ball.expected_landing_point_x : unit(x, 20, 432)
+//   ball.y                            : unit(y, 0, 252)
+//   ball.x_velocity, ball.y_velocity  : v / 20
+//   ball.is_power_hit                 : 0 또는 1
+//   match.my_score, opponent_score, score_diff : v / winning_score (기본 15)
+//   match.i_am_serving                : 0 또는 1
+//   match.side_flag                   : 왼쪽 -1, 오른쪽 +1
+//
+// 값이 [-1, 1] 을 벗어날 수 있다. **자르지 않는다** — 자르면 "아주 빠른 공" 과
+// "빠른 공" 이 구별되지 않는다. 범위는 척도이지 상한이 아니다.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 제외한 것과 그 이유 (FR-2)
+// ─────────────────────────────────────────────────────────────────────────────
+//   computer_boldness, computer_where_to_stand_by
+//     **상대의 은닉 상태다.** 넣으면 vs FSM 성적이 부풀고 셀프플레이에서 의미를 잃는다.
+//   rotation, fine_rotation, punch_effect_*, sound.*
+//     렌더링 전용. 물리에 영향이 없다.
+//   previous_x/y, previous_previous_x/y
+//     잔상 효과용. 속도가 이미 관측에 있으므로 정보가 중복된다.
+//   normal_status_arm_swing_direction
+//     팔 스윙 애니메이션 선택자.
+//   is_winner, game_ended
+//     에피소드(랠리) 밖의 값이다. 게임 단위는 평가 전용이다.
+//   expected_landing_point_x_when_power_hit
+//     **행동 평가이지 상태 추정이 아니다** (plan.md §5.1). 게다가 원작에서 일부러
+//     부정확하게 짜여 있다 (네트 기둥 옆면 반사를 계산하지 않는다 — 컴퓨터가 실수하도록
+//     의도된 코드). 주면 정책에게 Q 함수와 FSM 의 실수 습관을 함께 물려주게 된다.
+
+syntax = "proto3";
+
+package pika.obs;
+
+// 한 슬롯이 보는 관측 전체. 직렬화는 이 필드 번호 순서를 따른다.
+message Observation {
+  PlayerObs me = 1;
+  PlayerObs opponent = 2;
+  BallObs ball = 3;
+  MatchObs match = 4;
+}
+
+// 플레이어 하나. 15 차원.
+message PlayerObs {
+  float x = 1;
+  float y = 2;
+  float y_velocity = 3;
+
+  // state one-hot (7). 원작 주석의 이름을 따른다:
+  // 0 normal, 1 jumping, 2 jumping_and_power_hitting, 3 diving,
+  // 4 lying_down_after_diving, 5 win!, 6 lost..
+  float state_is_normal = 4;
+  float state_is_jumping = 5;
+  float state_is_jumping_and_power_hitting = 6;
+  float state_is_diving = 7;
+  float state_is_lying_down_after_diving = 8;
+  float state_is_win = 9;
+  float state_is_lost = 10;
+
+  float frame_number = 11;
+  float diving_direction = 12;
+  float lying_down_duration_left = 13;
+  float is_collision_with_ball_happened = 14;
+  float delay_before_next_frame = 15;
+}
+
+// 공. 기본 6 차원.
+message BallObs {
+  float x = 1;
+  float y = 2;
+  float x_velocity = 3;
+  float y_velocity = 4;
+  float is_power_hit = 5;
+
+  // 공 상태만의 결정론적 함수다. 상대의 내부 상태가 들어가지 않으므로 은닉 정보가 아니고,
+  // FSM 은 이 값을 공짜로 받는다 (PhysicsEngine.kt:279). 빼면 Track A 는
+  // "정책이 FSM 보다 약한가" 가 아니라 "정책이 FSM 보다 적게 보고도 이기는가" 를 재게 된다.
+  // 측정: 평균 22단계 롤아웃, 호출의 52.5% 가 반사를 포함, 포물선 근사는 p90 에서
+  // 220px(코트 절반) 빗나간다 (plan.md §2.5).
+  // @optional:obs_include_expected_landing
+  float expected_landing_point_x = 6;
+}
+
+// 경기 상황. 기본 4 차원.
+message MatchObs {
+  float my_score = 1;
+  float opponent_score = 2;
+  float score_diff = 3;
+  float i_am_serving = 4;
+
+  // 진영을 정책에게 알려준다. **기본 off** — 켜면 정책이 두 진영을 따로 학습해서
+  // 미러링의 샘플 효율 이득이 사라진다. 켜는 것은 "미러링만으로 부족하다" 를
+  // 측정으로 보인 뒤다 (plan.md §5.3).
+  // @optional:obs_include_side_flag
+  float side_flag = 5;
+}
