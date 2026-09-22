@@ -75,12 +75,18 @@ class EnvServer private constructor(
             return EnvServer(builder.tune(service).build(), file, listOf(boss, worker))
         }
 
-        /** TCP. 컨테이너 밖에서 붙거나 UDS 가 막힌 환경용. */
-        fun overTcp(port: Int, service: EnvService = EnvService()): EnvServer {
+        /**
+         * TCP. 컨테이너 밖에서 붙거나 UDS 가 막힌 환경용.
+         *
+         * @param host 기본은 모든 인터페이스다 — 컨테이너 안에서 127.0.0.1 에 열면
+         *   포트를 매핑해도 밖에서 붙을 수 없다. 이 서버는 인증이 없으므로
+         *   신뢰할 수 있는 네트워크(로컬·compose·파드 안)에만 둔다.
+         */
+        fun overTcp(port: Int, service: EnvService = EnvService(), host: String = "0.0.0.0"): EnvServer {
             val boss = daemonGroup("pika-boss", 1)
             val worker = daemonGroup("pika-worker", 0)
             val builder = NettyServerBuilder
-                .forAddress(InetSocketAddress("127.0.0.1", port))
+                .forAddress(InetSocketAddress(host, port))
                 .channelType(NioServerSocketChannel::class.java)
                 .bossEventLoopGroup(boss)
                 .workerEventLoopGroup(worker)
@@ -108,7 +114,9 @@ class EnvServer private constructor(
                     "--uds" -> uds = args[++i]
                     "--port" -> port = args[++i].toInt()
                     "--help", "-h" -> {
-                        println("사용법: EnvServer [--uds <경로> | --port <포트>]")
+                        println("사용법: EnvServer [--uds <경로>] [--port <포트>]")
+                        println("  둘 다 주면 두 전송을 동시에 연다 (compose 는 그렇게 쓴다).")
+                        println("  아무것도 안 주면 UDS $DEFAULT_UDS_PATH.")
                         return
                     }
                     else -> error("알 수 없는 인자: ${args[i]} (--help)")
@@ -116,15 +124,26 @@ class EnvServer private constructor(
                 i++
             }
 
-            val server = when {
-                port != null -> EnvServer.overTcp(port).also { println("TCP 127.0.0.1:$port 에서 대기합니다") }
-                else -> {
+            // ⚠️ 두 전송이 **같은** EnvService 를 공유한다. 서버는 단일 테넌트이므로
+            //    두 클라이언트가 동시에 붙으면 나중에 Configure 한 쪽이 이긴다.
+            //    앞 클라이언트는 조용히 망가지는 대신 세션 번호 덕에 즉시 실패한다.
+            //    (컨테이너 안에서는 UDS 로, 호스트에서는 TCP 로 붙는 구성을 위해 필요하다.
+            //     macOS 에서는 바인드 마운트 UDS 가 동작하지 않아 TCP 가 유일한 길이다.)
+            val service = EnvService()
+            val servers = buildList {
+                if (port != null) {
+                    add(EnvServer.overTcp(port, service))
+                    println("TCP 0.0.0.0:$port 에서 대기합니다")
+                }
+                if (uds != null || port == null) {
                     val path = uds ?: DEFAULT_UDS_PATH
-                    EnvServer.overUnixSocket(path).also { println("UDS $path 에서 대기합니다") }
+                    add(EnvServer.overUnixSocket(path, service))
+                    println("UDS $path 에서 대기합니다")
                 }
             }
             println("계약 버전 ${EnvService.VERSION}. Configure 를 기다립니다.")
-            server.start().awaitTermination()
+            servers.forEach { it.start() }
+            servers.first().awaitTermination()
         }
 
         /** compose 에서 볼륨으로 공유하는 경로와 같게 둔다. */

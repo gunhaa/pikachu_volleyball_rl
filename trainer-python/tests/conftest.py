@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import grpc
@@ -45,12 +46,18 @@ def _wait_until_healthy(target: str, timeout_s: float = 60.0) -> None:
 
 
 @pytest.fixture(scope="session")
-def env_target() -> str:
-    """gRPC 대상 문자열. 세션 내내 같은 서버를 쓴다."""
+def env_target() -> Iterator[str]:
+    """gRPC 대상 문자열. 세션 내내 같은 서버를 쓴다.
+
+    ⚠️ 이 함수에는 `yield` 가 있으므로 **제너레이터**다. `return 값` 은 값을 내지 않고
+       그냥 끝난다 (pytest 는 "did not yield a value" 로 실패한다). 외부 서버 경로도
+       반드시 yield 해야 한다 — 이 함정을 한 번 밟았다.
+    """
     external = os.environ.get("PIKA_ENV_TARGET")
     if external:
         _wait_until_healthy(external)
-        return external
+        yield external
+        return
 
     root = repo_root()
     launcher = root / "engine-kotlin/server/build/install/server/bin/server"
