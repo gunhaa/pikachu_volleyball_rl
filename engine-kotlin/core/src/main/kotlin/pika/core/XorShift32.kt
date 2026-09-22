@@ -1,7 +1,15 @@
-package pika.conformance
+package pika.core
 
 /**
  * xorshift32 — `tools/js-oracle/xorshift32.mjs` 와 **비트 단위로 동일한** 수열을 낸다.
+ *
+ * ⚠️ **이것은 `physics.js` 의 포팅이 아니다.** 업스트림은 `rand.js` 의 전역 `customRng` 를
+ *    쓰고, 그 자리에 무엇을 꽂을지는 호출자의 몫이다 ([Rand] 참고).
+ *    이 클래스는 우리가 재현성을 위해 **주입하는 결정론 장치**이고, `core` 에 있는 이유는
+ *    `conformance` 와 `env` 가 **같은 한 벌**을 써야 하기 때문이다 (plan.md §3.1).
+ *    두 벌로 갈라지면 골든 체인 해시와 환경의 난수가 조용히 어긋난다.
+ *
+ *    `core` 의 "외부 의존성 0"(NFR-1) 에는 영향이 없다 — 시프트와 XOR 뿐이다.
  *
  * 시프트/XOR 만 쓰므로 JS 의 uint32 연산과 Kotlin 의 signed Int 연산이 같은 비트를 만든다.
  * (`ushr` 은 부호 없는 오른쪽 시프트라 JS `>>>` 와 같다.)

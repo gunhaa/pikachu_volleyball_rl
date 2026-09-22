@@ -2,6 +2,7 @@ package pika.conformance
 
 import pika.core.PikaPhysics
 import pika.core.PikaUserInput
+import pika.core.XorShift32
 import kotlin.math.abs
 
 /**

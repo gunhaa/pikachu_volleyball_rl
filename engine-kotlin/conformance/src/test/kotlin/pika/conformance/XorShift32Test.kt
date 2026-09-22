@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import pika.core.XorShift32
 
 /**
  * Kotlin xorshift32 가 JS 구현과 **비트 단위로 일치**하는지 본다. (tasks.md P5)

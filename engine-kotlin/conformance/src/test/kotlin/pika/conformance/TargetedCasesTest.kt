@@ -12,6 +12,7 @@ import pika.core.NET_PILLAR_HALF_WIDTH
 import pika.core.NET_PILLAR_TOP_TOP_Y_COORD
 import pika.core.PikaPhysics
 import kotlin.math.abs
+import pika.core.XorShift32
 
 /**
  * 표적 케이스가 **실제로 무언가를 겨냥하고 있는지** 확인한다. (tasks.md P7)

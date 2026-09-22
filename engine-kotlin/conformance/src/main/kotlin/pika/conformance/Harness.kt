@@ -5,6 +5,7 @@ import pika.core.Ball
 import pika.core.PikaPhysics
 import pika.core.PikaUserInput
 import pika.core.Rand
+import pika.core.XorShift32
 
 /**
  * 에피소드 하네스 — `tools/js-oracle/harness.mjs` 의 Kotlin 짝이다.

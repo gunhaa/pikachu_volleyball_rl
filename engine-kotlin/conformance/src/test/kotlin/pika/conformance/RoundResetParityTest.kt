@@ -8,6 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertTrue
+import pika.core.XorShift32
 
 /**
  * 하네스의 라운드 리셋이 JS 와 동일한지 본다. (tasks.md P5)
