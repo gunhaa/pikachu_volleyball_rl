@@ -50,3 +50,17 @@ val checkNoGrpc = tasks.register("checkNoGrpc") {
 }
 
 tasks.named("check") { dependsOn(checkNoGrpc) }
+
+/**
+ * 관측·보상 골든 재생성. (P4, plan.md §10)
+ *
+ * ⚠️ 테스트가 빨간불이라고 습관처럼 돌리는 명령이 아니다. 먼저 무엇이 바뀌었는지 찾고,
+ *    의도한 변경일 때만 돌린 뒤 이유를 커밋 메시지에 적는다.
+ */
+tasks.register<JavaExec>("writeEnvGolden") {
+    group = "verification"
+    description = "관측·보상 체인 해시 골든을 다시 만든다. 이유를 커밋 메시지에 적을 것."
+    mainClass.set("pika.env.GoldenMain")
+    classpath = sourceSets["main"].runtimeClasspath
+    systemProperty("repo.root", rootProject.projectDir.absolutePath)
+}

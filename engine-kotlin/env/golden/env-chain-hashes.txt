@@ -1,0 +1,21 @@
+# 관측·보상 골든 체인 해시 — 회귀 감지용. (tasks.md P4 / M2-d)
+#
+# 한 줄 = 케이스 하나:  <케이스> <환경수> <프레임수> <레이아웃해시16> <체인해시(SHA-256 64자)>
+# 케이스의 구성(슬롯·플래그·가중치)은 EnvGolden.CASES 가 정의한다. 이 파일은 결과만 담는다.
+#
+# 재생성:  ./gradlew :engine-kotlin:env:writeEnvGolden
+#
+# ⚠️ 깨졌다고 그냥 재생성하지 말 것. 관측 레이아웃·정규화 상수·보상 항·리셋 순서·시드 유도
+#    중 하나가 바뀐 것이다. 의도한 변경이면 갱신하되 **무엇을 왜 바꿨는지 커밋 메시지에 적는다.**
+#    이 규칙이 유일한 방어선이다 — Phase 1 과 달리 여기서는 갱신이 정당할 때가 있기 때문이다.
+trackA 4 2000 1fc9285c31b66f2c 53fe06b624652abebcec5f74496bf002f6193d669a65c6883fad15f3f27a7b42
+trackA-right 4 2000 1fc9285c31b66f2c ae6154d539203c4be28ca5a2ae1d96db5203924392bf88b6d22508b31316bc41
+trackB 4 2000 1fc9285c31b66f2c 8b8beac3156a51249f2c6ab2f8d54c7498b03e617a50ad3fec8d6e975116c829
+no-mirror 2 1000 1fc9285c31b66f2c 878f9168995b11768518f89a0d18231acf0c707cc6c12d15f606a32259568234
+no-landing 2 1000 09f56ba733823338 67f37c8cc2e694ff14be3af316a60e87ecde2b81e197eab91d3137ce2d62e946
+side-flag 2 1000 d696c0b3b96085b8 4d5a5538df4409a2d02fad813491e46f7200fe3bce757b0d8f663275d8798a7d
+no-edge-trigger 2 1000 1fc9285c31b66f2c 1b3774360350fde9f329050cad138c24b975d0cb45da028943d972346c20dfa5
+truncating 2 1000 1fc9285c31b66f2c 057857ad6575af5e0a5f456678a9d4c364f8a3f241bab82b88e6e138810f59f0
+shaped 2 1000 1fc9285c31b66f2c e39112f93eec11aa1263a61858bd604cf2ce65ae55e8588cabb2b6d49ff85092
+seed-7 1 1000 1fc9285c31b66f2c 9291657efbfe199ecc8c4a0ca119c67cddda7fab835c937799ab8344f55009be
+wide 16 500 1fc9285c31b66f2c 0bd49b360c1cfcab384c337bbea6879294ea5c7c71d20d28ea6328b0e72a0d86
