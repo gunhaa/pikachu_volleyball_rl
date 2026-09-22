@@ -7,7 +7,10 @@ on:
 
 # CI 는 업스트림(`upstream/`)을 클론하지 않는다.
 # 전수 차분 검사는 Node 오라클이 필요하므로 로컬에서 돌리고,
-# CI 는 축소 샘플의 체인 해시 골든 회귀만 본다. (NFR-2, plan.md §5.4)
+# CI 는 축소 샘플의 체인 해시 골든 회귀만 본다. (NFR-4, plan.md §5.4)
+#
+# ⚠️ 처리량 벤치는 CI 에 넣지 않는다. 러너마다 숫자가 다른데 초록/빨강으로 판정하면
+#    거짓 신호가 된다. 처리량은 `scripts/bench-env.sh` 로 사람이 재고 기록한다.
 
 jobs:
   kotlin:
@@ -23,6 +26,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # core · env · server · conformance 전부. build 가 각 모듈의 test 를 포함한다:
+      #   conformance — 골든 615 에피소드 (M2-f)
+      #   env         — 관측/보상 골든 11 케이스, 결정론(M2-d), M2-e, M2-g
+      #   server      — gRPC 결과가 in-process 와 바이트까지 같은지
       - run: ./gradlew build --stacktrace
 
   python:
@@ -33,6 +40,16 @@ jobs:
         working-directory: trainer-python
     steps:
       - uses: actions/checkout@v4
+
+      # ⚠️ Python 테스트는 **진짜 엔진 서버를 띄운다** (trainer-python/tests/conftest.py).
+      #    가짜 서버를 세우면 계약을 두 번 구현하게 되고, 그 둘이 맞는지는 아무도 안 본다.
+      #    그래서 이 잡에도 JDK 가 필요하다.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
 
       - uses: astral-sh/setup-uv@v5
         with:

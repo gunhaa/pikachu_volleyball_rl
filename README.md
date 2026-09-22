@@ -30,8 +30,9 @@
 | 도구 | 버전 | 비고 |
 |---|---|---|
 | JDK | **21** | Gradle toolchain 이 21 을 찾는다. 더 높은 JDK 로 Gradle 을 돌려도 된다 |
-| Node.js | 20+ | JS 오라클 실행용 |
-| [uv](https://docs.astral.sh/uv/) | 최신 | Python 3.11 환경 관리 |
+| Node.js | 20+ | JS 오라클 실행용 (차분 테스트에만 필요) |
+| [uv](https://docs.astral.sh/uv/) | 최신 | Python 3.12 환경 관리 |
+| Docker | 최신 | compose 로 엔진 서버를 띄울 때만 |
 
 ### 1. 업스트림 받기
 
@@ -45,9 +46,12 @@
 ### 2. 빌드와 테스트
 
 ```bash
-./gradlew build                 # Kotlin 빌드 + 단위 테스트
+./gradlew build                 # Kotlin 빌드 + 단위 테스트 (골든 회귀 포함)
 cd trainer-python && uv sync && uv run pytest
 ```
+
+Python 테스트는 **진짜 엔진 서버를 띄워서** 붙는다 (`tests/conftest.py`). 그래서 JDK 가 필요하다.
+가짜 서버를 세우면 계약을 두 번 구현하게 되고, 그 둘이 맞는지는 아무도 확인하지 않는다.
 
 ### 3. 오라클 자체 검증
 
@@ -92,19 +96,96 @@ HTML 리포트는 `coverage/index.html` 에 나온다.
 
 ---
 
+## RL 환경 (Phase 2)
+
+### 엔진 서버 띄우기
+
+```bash
+./gradlew :engine-kotlin:server:runServer                                  # UDS /tmp/pika-env.sock
+./gradlew :engine-kotlin:server:runServer --args="--port 50051"            # TCP
+./gradlew :engine-kotlin:server:runServer --args="--uds /tmp/s.sock --port 50051"  # 둘 다
+```
+
+컨테이너로:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml up -d --build
+PIKA_ENV_TARGET=127.0.0.1:50051 uv run --directory trainer-python pytest
+```
+
+> ⚠️ 서버는 **단일 테넌트**다. `VectorEnv` 를 하나만 들고 있으므로 두 번째 클라이언트가
+> `Configure` 하면 앞 구성은 사라진다. 그 사고가 조용히 일어나지 않도록 `Configure` 가
+> 세션 번호를 주고 `Step`·`Reset` 이 그것을 들고 온다. 낡은 세션은 즉시 실패한다.
+
+### 처리량 재기
+
+```bash
+./scripts/bench-env.sh                      # (a)(b)(c) 세 지점을 한 번에
+./gradlew :engine-kotlin:env:benchEnv       # (a) env 단독만
+./gradlew :engine-kotlin:server:benchLoopback  # (b) gRPC 루프백만
+```
+
+숫자 하나만 재면 미달일 때 어디를 고쳐야 할지 알 수 없다. 그래서 셋을 나눠 재고 **간극**으로 읽는다:
+`(a)−(b)` = 직렬화 + RPC, `(b)−(c)` = Python 디코딩 + 정책 forward.
+
+측정값은 [`ROADMAP.md`](ROADMAP.md) 의 Phase 2 결과에 있다.
+
+### 관측 레이아웃 확인하기
+
+레이아웃의 단일 정의는 [`proto/obs_spec.proto`](proto/obs_spec.proto) 다. Kotlin·Python 양쪽이
+자기 목록을 이 파일과 대조하고, 서버의 `Health` 가 주는 레이아웃 해시를 클라이언트가 자기 해시와
+맞춰 본다. 어긋난 서버에 붙으면 **관측이 조용히 뒤섞이는 대신 즉시 실패**한다.
+
+```bash
+# Python 쪽에서 본 레이아웃
+uv run --directory trainer-python python -c "
+from pika_trainer.obs_spec import ObsSpec
+s = ObsSpec.load()
+print(s.dim(), s.layout_hash()[:16])
+print(s.field_names())
+"
+```
+
+관측·보상이 바뀌면 `engine-kotlin/env/golden/env-chain-hashes.txt` 가 깨진다. 그것이 목적이다.
+
+```bash
+./gradlew :engine-kotlin:env:writeEnvGolden   # 골든 재생성
+```
+
+> ⚠️ 깨졌다고 습관처럼 재생성하지 않는다. 골든 줄에는 레이아웃 해시가 따로 실려 있어
+> **레이아웃이 바뀐 것인지 값이 바뀐 것인지** 구별할 수 있다. 의도한 변경일 때만 갱신하고,
+> **무엇을 왜 바꿨는지 커밋 메시지에 적는다.**
+
+---
+
 ## 구조
 
 ```
-proto/state_spec.proto      차분 테스트가 비교하는 상태의 단일 정의 (계약)
-scripts/fetch-upstream.sh   업스트림 고정 커밋 fetch
+proto/
+  state_spec.proto          차분 테스트가 비교하는 상태의 단일 정의 (계약)
+  obs_spec.proto            관측 40차원 레이아웃의 단일 정의 (계약)
+  env.proto                 gRPC 서비스 계약
+scripts/
+  fetch-upstream.sh         업스트림 고정 커밋 fetch
+  coverage.sh               physics.js 커버리지 측정
+  bench-env.sh              처리량 (a)(b)(c) 세 지점 측정
+  gen-python-proto.sh       env.proto → Python stub 생성
 tools/js-oracle/            Node 오라클 — physics.js 를 정답으로 돌린다
 tools/targeted-cases.txt    표적 케이스 표 — JS·Kotlin 이 함께 읽는다
-scripts/coverage.sh         physics.js 커버리지 측정
 engine-kotlin/
-  core/                     physics.js 포팅 (외부 의존성 0)
+  core/                     physics.js 포팅 + XorShift32 (외부 의존성 0)
+  env/                      경기 규칙 · 관측 · 행동 · 보상 · 벡터 환경 · 벤치
+    golden/env-chain-hashes.txt  관측·보상 골든 (커밋 대상)
+  server/                   gRPC 서버 (packed bytes 직렬화)
   conformance/              차분 테스트 하네스 + 실행기
     golden/chain-hashes.txt CI 골든 회귀용 체인 해시 (커밋 대상)
-trainer-python/             PPO 트레이너 (현재는 골격)
+trainer-python/
+  src/pika_trainer/
+    obs_spec.py             obs_spec.proto 파서 (레이아웃 대조)
+    env_client.py           Gymnasium VectorEnv
+    bench_client.py         (c) 종단 처리량 벤치
+    pb/                     env.proto 에서 생성된 stub (커밋 대상)
+deploy/compose/             엔진 서버 이미지와 compose
 ```
 
 문서는 [`CLAUDE.md`](CLAUDE.md) 의 문서 맵을 따른다.

@@ -55,11 +55,11 @@
 | 구성품 | 기술 | 역할 |
 |---|---|---|
 | `engine-kotlin/core` | Kotlin/JVM 21 | `physics.js` 포팅. 순수 함수, 외부 의존성 0 |
-| `engine-kotlin/env` | Kotlin | 관측/행동/보상/미러링, 라운드 관리, 벡터 환경 |
-| `engine-kotlin/server` | Kotlin + gRPC | 배치 스텝 RPC, 헬스체크/메트릭 |
+| `engine-kotlin/env` | Kotlin | 관측/행동/보상/미러링, 라운드 관리, 벡터 환경. **gRPC 를 모른다** |
+| `engine-kotlin/server` | Kotlin + gRPC (grpc-java) | 배치 스텝 RPC, 헬스체크/메트릭 |
 | `engine-kotlin/analysis` | Kotlin | 경기 통계, 리플레이 인코딩, MySQL 적재 |
 | `engine-kotlin/conformance` | Kotlin + Node | JS 차분 테스트 하네스 |
-| `trainer-python` | Python 3.11, PyTorch, Gymnasium | PPO, Track A/B 러너, 리그, ONNX export |
+| `trainer-python` | Python 3.12, PyTorch, Gymnasium | PPO, Track A/B 러너, 리그, ONNX export |
 | `viewer-web` | PixiJS | 리플레이 재생 |
 | `proto/` | protobuf | State Spec 및 gRPC 계약 (언어 간 단일 진실 공급원) |
 | MySQL 8.4 | — | 경기 지표 · 리플레이 · MLflow backend store |
@@ -83,7 +83,7 @@
 |---|---|---|---|---|
 | **0** | 저장소 기반과 빌드 골격 | `.gitignore`, `README.md`, `scripts/`, Gradle/uv 골격, CI | `gradlew build` · `pytest` 통과 | ✅ 2026-09-21 |
 | **1** | 물리 엔진 동치성 확보 | `core`, `conformance`, `proto`(State Spec) | 상태 해시 100% 일치, 분기 커버리지 ≥ 95% | ✅ 2026-09-21 |
-| **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | |
+| **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | ✅ 2026-09-23 |
 | **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) | |
 | **4** | Track B — zero 셀프플레이 | `track_b.py`, `league.py` | vs FSM 승률 ≥ 70% (held-out) | |
 | **5** | 두 트랙 비교 | 비교 리포트 | A vs B 대결 + 학습 곡선 분석 완료 | |
@@ -118,10 +118,75 @@ lockstep 프레임별 해시로 전수 비교하므로 첫 불일치 프레임�
 - 물리를 건드리는 변경은 `./gradlew build` 의 골든 회귀가 잡는다.
   깨졌을 때 골든을 재생성하는 것은 검증을 무력화하는 것이다 — 전수 차분으로 원인을 찾는다.
 
-### Phase 2 — RL 환경 + gRPC
+### Phase 2 — RL 환경과 gRPC ✅
 
-관측/행동/보상/미러링과 라운드 관리를 붙여 RL 환경을 만들고, 배치 스텝 gRPC 로 Python 과 연결한다.
-`powerHit` 은 엣지 트리거이므로 환경 래퍼에서 변환한다.
+증명된 `core` 위에 경기 규칙·관측·행동·보상을 얹고, 배치 스텝 gRPC 로 Python 에 연결했다.
+Phase 1 과 달리 **비교할 정답이 없으므로**, 결정론을 먼저 세우고 그 위에 의미론을 얹었다 —
+관측이 맞는지는 증명할 수 없지만 어제의 관측과 오늘의 관측이 같은지는 증명할 수 있다.
+
+**결과 (2026-09-23)** — `history/2026-09-23-rl-env-grpc/`
+
+| ID | 지표 | 목표 | 결과 |
+|---|---|---|---|
+| M2-a | Python 종단 (N=256, UDS, 더미 MLP) | ≥ 50,000 env-step/s | ✅ **484,371** (9.7배). 컨테이너 TCP 로도 256,021 |
+| M2-b | `env` 단독 (관측 인코딩 포함, 단일 스레드) | ≥ 1,000,000 | ✅ **5.1M ~ 7.2M** (엔진 단독 대비 1.1~1.6배 감속) |
+| M2-c | Gymnasium 규약 + next-step autoreset | 통과 | ✅ |
+| M2-d | 결정론 (재실행·벡터 크기 변경) | 바이트 일치 | ✅ Kotlin·Python 양쪽에서 |
+| M2-e | FSM vs FSM 800 게임 재현 | 799/800, 11,998:4,169 | ✅ 8개 수치 전부 일치 |
+| M2-f | Phase 1 골든 회귀 유지 | 초록 | ✅ 615 에피소드 불변 |
+| M2-g | Track B 에서 FSM 미실행 | 불변식 통과 | ✅ |
+
+처리량 세 지점 (M-series, N=256, NFR-3):
+
+| 지점 | env-step/s | 배치 시간 | 5.12ms 예산 대비 |
+|---|---|---|---|
+| (a) `env` 단독 | 5,972,192 | 0.043 ms | 0.8% |
+| (b) gRPC 루프백 (UDS) | 1,098,428 | 0.233 ms | 4.6% |
+| (c) Python 종단 (UDS) | 484,371 | 0.529 ms | 10.3% |
+
+`(a)−(b)` = 0.19 ms 가 직렬화 + RPC, `(b)−(c)` = 0.30 ms 가 Python 디코딩 + 정책이다.
+간극이 N 과 거의 무관하다 → 비용의 정체는 데이터 양이 아니라 **호출당 고정 지연**이다.
+bidi 스트리밍(예비안)은 필요 없었다. **측정이 그렇게 말했다.**
+
+#### 이후 Phase 가 반드시 알아야 하는 것
+
+1. **진영 비대칭은 영구 제약이다.** 공의 가동 폭 `[20, 432]` 의 중심은 226 인데 네트는 216 이다.
+   FSM 끼리 붙이면 왼쪽이 800게임 중 **799** 를 이긴다 (득점 11,998 : 4,169).
+   원작의 성질이므로 고치지 않는다. **평가는 언제나 양 진영에서 돌리고 따로 보고한다**
+   (`GameEvaluator.asLeft` · `asRight` · `sideGap`). 한 진영에서만 재면 승률이 실력이 아니라
+   진영을 재게 된다.
+
+2. **슬로모션 6프레임을 재현하지 않는다.** 업스트림은 착지 후 `slowMotionFramesLeft = 6` 동안
+   물리를 더 돌리고 그 6프레임도 RNG 를 소비한다. `env` 는 착지 즉시 랠리를 끝낸다.
+   → **프레임 물리는 동치이지만 랠리 경계의 프레임 수가 다르다.**
+   Phase 6 의 리플레이 뷰어는 **반드시 같은 규칙**을 써야 한다.
+
+3. **리플레이 재현 키는 `(시드, 입력 시퀀스, 상대 구성)` 이다.** FSM 이 RNG 를 소비하므로
+   상대가 FSM 이냐 정책이냐에 따라 난수 스트림이 갈라진다. 상대 구성을 함께 저장하지 않으면
+   이미 저장한 리플레이를 재생할 수 없다. Phase 6 이 스키마를 만들 때 이 사실이 전제다.
+
+4. **FSM 은 에이전트보다 반 프레임 최신 정보를 본다.** 에이전트의 입력은
+   `runEngineForNextFrame` 호출 **전**에 정해지고, FSM 은 그 **안에서** 공이 이미 움직인 뒤에
+   결정한다. 최대 20px 의 정보 우위다. 원작의 구조이므로 고치지 않되,
+   **Track A 승률을 순수한 실력 차로 읽으면 정책을 과소평가**하게 된다. Phase 3 의 결과 보고에
+   이 사실을 첨부한다.
+
+5. **학습된 정책을 게임에 꽂는 자리는 FSM 이 아니라 키보드다.** `keyboardArray[1]` 자리에
+   넣고 `isComputer` 는 `false` 로 둔다. 그 자리가 **훈련 때와 같은 타이밍**이기 때문이다
+   (4번의 귀결). 덤으로 `keyboard.js` 의 역할이 곧 powerHit 엣지 변환이므로 `EdgeTrigger`
+   로직이 그대로 재사용된다.
+
+#### 이후 Phase 가 기대도 되는 것
+
+- `EnvConfig` 의 플래그(미러링·착지점·진영 플래그·엣지 변환·보상 가중치)를 바꾸면
+  **관측·보상 골든 11 케이스가 깨진다.** 그것이 목적이다 — 의도한 변경이면 갱신하고
+  이유를 커밋 메시지에 적는다.
+- 보상 항 5개(`rally_win` · `ball_touch` · `crossed_net` · `opponent_miss` · `time_penalty`)는
+  이미 계산되어 `info` 로 나간다. Phase 3 은 **가중치만 올리면 된다**. 기본값은
+  `rally_win = 1`, 나머지 0 이다.
+- `maxRallyFrames` 기본 3,000 은 측정된 FSM p99(2,821) 위, 최대(6,011) 아래다.
+- 처리량 목표는 **엔진과 무관하다.** 엔진은 예산의 1% 도 쓰지 않는다.
+  M2-a 가 미달이면 원인은 엔진이 아니므로 **엔진 병렬화는 오진이다.**
 
 ### Phase 3 — Track A
 
