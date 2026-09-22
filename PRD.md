@@ -39,7 +39,7 @@ if (futureBallX < BALL_RADIUS /* 20 */ || futureBallX > GROUND_WIDTH /* 432 */) 
 으로 216 대칭이지만 **공은 아니다.** 원작 그대로 두기로 한 결정은 Phase 1 에 기록되어 있다
 (대칭으로 고치면 `expectedLandingPointXWhenPowerHit` 의 루프가 끝나지 않는 사례가 관측됨).
 
-측정된 귀결 — FSM vs FSM, 800 게임 / 12,167 랠리:
+측정된 귀결 — FSM vs FSM, 800 게임 / 16,167 랠리:
 
 | 항목 | 값 |
 |---|---|
