@@ -33,6 +33,14 @@ data class EnvConfig(
     /** 에이전트의 `powerHit` 을 엣지 트리거로 변환하는가 (FR-5). Phase 3 이 A/B 할 수 있게 끌 수 있다. */
     val edgeTriggerPowerHit: Boolean = true,
 
+    /**
+     * FSM 의 `computerBoldness` 를 이 값(0..4)으로 고정한다. **-1 이면 매 랠리 추첨(원작)이다.**
+     *
+     * ⚠️ 커리큘럼 손잡이가 아니라 **진단 축**이다 (PRD §2.1). 무작위 정책의 승률은 b 에
+     *    대해 단조롭지 않다 — 잡음 안이다. b 가 실제로 바꾸는 것은 난이도가 아니라 랠리 길이다.
+     */
+    val fixedBoldness: Int = -1,
+
     val rewardWeights: RewardWeights = RewardWeights(),
 ) {
     /** 외부 정책이 행동을 주는 슬롯의 인덱스. Track A 는 `[0]`, Track B 는 `[0, 1]`. */
@@ -51,5 +59,8 @@ data class EnvConfig(
         require(slotCount > 0) { "외부 정책 슬롯이 하나도 없습니다. FSM vs FSM 은 평가(GameEvaluator)의 일입니다." }
         require(winningScore > 0) { "winningScore 는 양수여야 합니다" }
         require(maxRallyFrames >= 0) { "maxRallyFrames 는 0(무제한) 이상이어야 합니다" }
+        require(fixedBoldness == -1 || fixedBoldness in 0..4) {
+            "fixedBoldness 는 -1(추첨) 또는 0..4 여야 합니다: $fixedBoldness"
+        }
     }
 }

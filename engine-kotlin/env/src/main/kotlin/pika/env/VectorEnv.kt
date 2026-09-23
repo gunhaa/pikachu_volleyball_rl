@@ -13,8 +13,19 @@ package pika.env
  *
  * ⚠️ 엔진을 병렬화하지 않는다. 엔진은 예산의 0.6% 만 쓴다 (plan.md §2.1).
  *    처리량이 모자라면 원인은 여기가 아니다. 병렬화는 오진이다.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 진영 분할 (plan.md §4, FR-3)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * [swappedEnvs] 개의 **뒤쪽** 환경은 `slots` 의 p1/p2 를 뒤바꿔 쓴다. 한 서버·한 배치
+ * 안에서 정책이 양 진영을 동시에 본다. 이 게임은 좌우 대칭이 아니므로(PRD §2.4) 한
+ * 진영에서만 학습하면 완료 조건 M3-b 가 운에 걸린다.
+ *
+ * ⚠️ **뒤쪽**인 이유: 시드는 `deriveSeed(baseSeed, envIndex, k)` 로 유도된다. 앞쪽을
+ *    바꾸면 기존 시드 배치가 통째로 밀려 Phase 2 의 결정론 골든(M2-d)과 비교할 수 없게 된다.
+ *    뒤에 붙이면 `swappedEnvs = 0` 이 기존 동작과 **바이트 단위로** 같다.
  */
-class VectorEnv(config: EnvConfig, val numEnvs: Int) {
+class VectorEnv(config: EnvConfig, val numEnvs: Int, val swappedEnvs: Int = 0) {
 
     var config: EnvConfig = config
         private set
@@ -22,7 +33,17 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int) {
     val slotCount: Int = config.slotCount
     val obsDim: Int = config.obsDim
 
-    private var envs: Array<PikaEnv> = Array(numEnvs) { PikaEnv(config, it) }
+    /**
+     * 환경 [i] 의 구성. 뒤쪽 [swappedEnvs] 개만 진영을 뒤집는다.
+     *
+     * 스왑은 **슬롯 구성만** 바꾼다. 시드·보상·관측 플래그는 그대로이므로
+     * `layoutHash` 도 같다 (관측 레이아웃은 슬롯 구성과 무관하다).
+     */
+    private fun configFor(i: Int): EnvConfig =
+        if (i >= numEnvs - swappedEnvs) config.copy(slots = Slots(config.slots.p2, config.slots.p1))
+        else config
+
+    private var envs: Array<PikaEnv> = Array(numEnvs) { PikaEnv(configFor(it), it) }
 
     /** `numEnvs × slotCount × obsDim` (float32). */
     val observations: FloatArray = FloatArray(numEnvs * slotCount * obsDim)
@@ -46,8 +67,21 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int) {
 
     init {
         require(numEnvs > 0) { "numEnvs 는 양수여야 합니다" }
+        require(swappedEnvs in 0..numEnvs) {
+            "swappedEnvs 는 0..$numEnvs 여야 합니다: $swappedEnvs"
+        }
+        // 스왑이 슬롯 수를 보존한다는 것이 packed 바이트 레이아웃의 전제다.
+        // `(External, Fsm)` 도 `(Fsm, External)` 도 slotCount == 1 이다. 구조로 못 박는다 —
+        // 여기가 깨지면 클라이언트의 reshape 가 조용히 어긋난다.
+        check(configFor(0).slotCount == configFor(numEnvs - 1).slotCount) {
+            "진영을 뒤집었더니 슬롯 수가 달라졌습니다: " +
+                "${configFor(0).slotCount} vs ${configFor(numEnvs - 1).slotCount}"
+        }
         writeScores()
     }
+
+    /** 환경 [i] 가 뒤집힌 진영인가. 진영별 메트릭을 나누는 기준이다 (FR-9). */
+    fun isSwapped(i: Int): Boolean = i >= numEnvs - swappedEnvs
 
     /**
      * 전부 처음 상태로. [baseSeed] 를 주면 그 시드로 갈아탄다.
@@ -57,7 +91,7 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int) {
      */
     fun reset(baseSeed: Int = config.baseSeed) {
         if (baseSeed != config.baseSeed) config = config.copy(baseSeed = baseSeed)
-        envs = Array(numEnvs) { PikaEnv(config, it) }
+        envs = Array(numEnvs) { PikaEnv(configFor(it), it) }
         for (i in 0 until numEnvs) {
             envs[i].reset(observations, i * slotCount * obsDim)
             terminated[i] = 0

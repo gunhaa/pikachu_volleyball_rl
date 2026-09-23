@@ -293,3 +293,150 @@ def test_second_client_invalidates_the_first(env_target: str):
     finally:
         first.close()
         second.close()
+
+
+# ── 진영 분할 (P2, FR-3 · FR-14) ────────────────────────────────────────
+
+
+def _obs_stream(env: PikaVectorEnv, steps: int, seed: int) -> np.ndarray:
+    """고정 시드의 행동으로 굴려 관측만 쌓는다. 두 구성이 같은지는 이것으로 묻는다."""
+    rng = np.random.default_rng(seed)
+    env.reset()
+    return rollout(env, steps, rng)[0]
+
+
+def test_for_policy_turns_on_the_side_flag(env_target: str):
+    """학습기와 평가기가 **하나의 상수**를 공유한다 (FR-14).
+
+    미러링은 오른쪽 관측을 왼쪽 시점으로 뒤집지만 이 게임은 좌우 대칭이 아니다.
+    플래그가 없으면 정책은 두 진영의 중간값으로 헤지한다. Track B(Phase 4)도 같은
+    값을 써야 Phase 5 의 동일 예산 비교가 성립한다.
+    """
+    from pika_trainer.env_client import OBS_INCLUDE_SIDE_FLAG
+
+    assert OBS_INCLUDE_SIDE_FLAG is True
+
+    options = EnvOptions.for_policy(num_envs=4, base_seed=3)
+    assert options.obs_include_side_flag is True
+    assert options.swapped_envs == 2, "주지 않으면 절반이 오른쪽 진영이다"
+
+    env = PikaVectorEnv(env_target, options)
+    try:
+        assert env.obs_dim == 41, "진영 플래그를 켜면 40 → 41 이다"
+        assert "match.side_flag" in env.obs_field_names
+        spec = ObsSpec.load()
+        assert env.server_layout_hash == spec.layout_hash(ObsOptions(include_side_flag=True))
+    finally:
+        env.close()
+
+
+def test_swapped_envs_equals_a_flipped_configuration(env_target: str):
+    """전량 스왑은 진영을 뒤집어 구성한 것과 **바이트 단위로** 같다.
+
+    이것이 참이어야 앞뒤 절반을 한 배치에 섞어도 각 절반이 정직한 표본이다.
+    """
+    flipped = PikaVectorEnv(env_target, EnvOptions(num_envs=4, base_seed=5, p1="fsm", p2="external"))
+    try:
+        expected = _obs_stream(flipped, 300, seed=1)
+    finally:
+        flipped.close()
+
+    swapped = PikaVectorEnv(
+        env_target, EnvOptions(num_envs=4, base_seed=5, p1="external", p2="fsm", swapped_envs=4),
+    )
+    try:
+        actual = _obs_stream(swapped, 300, seed=1)
+    finally:
+        swapped.close()
+
+    assert np.array_equal(expected, actual), "스왑이 슬롯 구성 이상의 일을 하고 있습니다"
+
+
+def test_slot_sides_and_score_orientation(env_target: str):
+    """진영은 **환경마다** 다르다. 점수를 열 인덱싱으로 읽으면 뒤쪽 절반이 뒤집힌다."""
+    env = PikaVectorEnv(
+        env_target, EnvOptions(num_envs=4, base_seed=13, p1="external", p2="fsm", swapped_envs=2),
+    )
+    try:
+        assert env.slot_sides.tolist() == [0, 0, 1, 1]
+
+        rng = np.random.default_rng(3)
+        env.reset()
+        # 점수가 0:0 이 아니게 될 때까지 굴린다 — 전부 0 이면 방향을 시험할 수 없다.
+        for _ in range(4000):
+            _, _, _, _, info = env.step(rng.integers(0, ACTION_COUNT, size=env.num_envs, dtype=np.int64))
+            if env._scores.any():
+                break
+
+        scores = env._scores  # (server_num_envs, 2) — [player1, player2] 진영 순서
+        assert scores.any(), "점수가 한 번도 나지 않았습니다"
+        assert info["score_me"].tolist() == [scores[0, 0], scores[1, 0], scores[2, 1], scores[3, 1]]
+        assert info["score_opponent"].tolist() == [scores[0, 1], scores[1, 1], scores[2, 0], scores[3, 0]]
+        assert info["side"].tolist() == [0, 0, 1, 1]
+    finally:
+        env.close()
+
+
+def test_swapped_envs_is_range_checked(env_target: str):
+    import grpc
+
+    for bad in (5, -1):
+        with pytest.raises(grpc.RpcError) as caught:
+            PikaVectorEnv(env_target, EnvOptions(num_envs=4, swapped_envs=bad))
+        assert caught.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+# ── boldness 고정 (P2, FR-13 — 진단 축이다) ─────────────────────────────
+
+
+def test_fixed_boldness_changes_the_stream(env_target: str):
+    """b 를 바꾸면 FSM 의 행동이 실제로 달라진다 — 배선이 죽어 있지 않다는 증거다.
+
+    ⚠️ 추첨 대비로 비교하면 안 된다. 추첨값이 마침 고정값과 같으면 (b 는 다섯 값뿐이다)
+       아무 차이도 없고 테스트가 이유 없이 실패한다. **고정값끼리** 비교한다.
+    """
+    def stream(boldness: int) -> np.ndarray:
+        env = PikaVectorEnv(
+            env_target, EnvOptions(num_envs=2, base_seed=17, fixed_boldness=boldness),
+        )
+        try:
+            return _obs_stream(env, 500, seed=2)
+        finally:
+            env.close()
+
+    assert not np.array_equal(stream(0), stream(4)), "boldness 를 바꿨는데 아무 변화가 없습니다"
+
+
+def test_fixed_boldness_is_range_checked(env_target: str):
+    import grpc
+
+    for bad in (5, -2):
+        with pytest.raises(grpc.RpcError) as caught:
+            PikaVectorEnv(env_target, EnvOptions(num_envs=2, fixed_boldness=bad))
+        assert caught.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+# ── 보상 항 (P4 가 쓴다) ────────────────────────────────────────────────
+
+
+def test_reward_terms_is_a_snapshot(track_a: PikaVectorEnv):
+    """롤아웃 버퍼가 참조를 들고 있으면 다음 스텝이 과거 값을 덮어쓴다.
+
+    그 버그는 손실 곡선에 드러나지 않는다 — 조용히 틀린다. 그래서 복사본을 낸다.
+    """
+    track_a.reset(seed=1)
+    rng = np.random.default_rng(0)
+    track_a.step(rng.integers(0, ACTION_COUNT, size=track_a.num_envs, dtype=np.int64))
+
+    terms = track_a.reward_terms
+    assert terms.shape == (track_a.num_envs, len(track_a.reward_term_names))
+    assert terms is not track_a._terms
+
+    # time_penalty 는 프레임마다 -1 이다 (항의 부호는 항 안에 있다).
+    penalty = track_a.reward_term_names.index("time_penalty")
+    assert np.all(terms[:, penalty] == -1.0)
+
+    terms[:] = 12345.0
+    for _ in range(3):
+        track_a.step(rng.integers(0, ACTION_COUNT, size=track_a.num_envs, dtype=np.int64))
+    assert np.all(track_a.reward_terms != 12345.0), "내부 버퍼가 밖으로 새어 나갔습니다"

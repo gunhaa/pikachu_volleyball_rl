@@ -81,6 +81,8 @@ object GameEvaluator {
      * @param maxRallyFrames 0 이면 무제한. 양수면 그 프레임을 넘긴 랠리는 **득점 없이 버린다**
      *   (양쪽 다 잘해져서 안 끝나는 랠리 대비 — PRD §7). 버려진 랠리는 따로 센다.
      * @param maxGameFrames 안전장치. 넘으면 예외다. 평가가 조용히 멈추는 것보다 낫다.
+     * @param fixedBoldness FSM 의 boldness 고정값. **진영별로 다르게 줄 수 있다** —
+     *   `plan.md` §2.1 측정 2 의 FSM(b_left) × FSM(b_right) 행렬이 그것을 요구한다 (FR-13).
      */
     fun playGame(
         seed: Int,
@@ -91,12 +93,13 @@ object GameEvaluator {
         firstServeIsPlayer2: Boolean = false,
         maxRallyFrames: Int = 0,
         maxGameFrames: Long = 2_000_000,
+        fixedBoldness: FixedBoldness = FixedBoldness.RANDOM,
     ): GameOutcome {
         requireController(slots.p1, p1, "player1")
         requireController(slots.p2, p2, "player2")
 
         val rng = XorShift32(seed)
-        val game = PikaGame(Rand { rng.nextRand() }, slots, winningScore, firstServeIsPlayer2)
+        val game = PikaGame(Rand { rng.nextRand() }, slots, winningScore, firstServeIsPlayer2, fixedBoldness)
         val inputs = arrayOf(PikaUserInput(), PikaUserInput())
 
         var frames = 0L
@@ -111,7 +114,8 @@ object GameEvaluator {
             val scorer = game.step(inputs)
             frames++
             check(frames <= maxGameFrames) {
-                "게임이 ${maxGameFrames} 프레임 안에 끝나지 않았습니다 (seed=$seed, 점수=${game.scores.toList()})"
+                "게임이 ${maxGameFrames} 프레임 안에 끝나지 않았습니다 " +
+                    "(seed=$seed, $fixedBoldness, 점수=${game.scores.toList()}, 랠리 ${game.rallyFrames}프레임)"
             }
 
             if (scorer != null) {
@@ -135,6 +139,8 @@ object GameEvaluator {
      *
      * @param policy 평가 대상. null 이면 엔진 내장 FSM 을 그 자리에 넣는다 (M2-e 의 자기 검증).
      * @param opponent 상대. null 이면 FSM.
+     * @param fixedBoldness FSM 의 boldness 고정값 (진단 축, FR-13). 진영을 바꿔도 **같은 값**을
+     *   쓴다 — 양쪽에 걸리지만 External 슬롯에서는 읽히지 않으므로 FSM 이 어느 쪽에 있든 같다.
      */
     fun evaluate(
         policy: Controller? = null,
@@ -143,6 +149,7 @@ object GameEvaluator {
         baseSeed: Int = 0,
         winningScore: Int = 15,
         maxRallyFrames: Int = 0,
+        fixedBoldness: FixedBoldness = FixedBoldness.RANDOM,
         onGame: (side: Int, index: Int, GameOutcome) -> Unit = { _, _, _ -> },
     ): EvalResult {
         val policySlot = if (policy == null) Slot.Fsm else Slot.External
@@ -166,6 +173,7 @@ object GameEvaluator {
                     winningScore = winningScore,
                     firstServeIsPlayer2 = i % 2 == 1,
                     maxRallyFrames = maxRallyFrames,
+                    fixedBoldness = fixedBoldness,
                 )
                 if (outcome.winner == policyIdx) wins++
                 pointsFor += outcome.scores[policyIdx]

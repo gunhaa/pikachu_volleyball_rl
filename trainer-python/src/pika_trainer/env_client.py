@@ -44,6 +44,17 @@ from .pb import env_pb2, env_pb2_grpc
 #: 행동 공간의 크기. 서버가 `Configure` 응답으로 확인해 준다.
 ACTION_COUNT = 18
 
+#: **학습기와 평가기가 함께 쓰는** 진영 플래그 설정 (FR-14, plan.md §4.5).
+#:
+#: 미러링은 오른쪽 슬롯의 관측을 왼쪽 시점으로 뒤집지만, 이 게임은 좌우 대칭이 아니다
+#: (PRD §2.4 — 뒷벽이 20px 다르다). 플래그를 켜면 정책이 두 진영의 중간값으로 헤지하는
+#: 대신 진영별 위치 선정을 낼 수 있다. 관측은 40 → 41차원이 된다.
+#:
+#: ⚠️ Track A(Phase 3)와 Track B(Phase 4)가 **같은 값**을 써야 Phase 5 의 동일 예산 비교가
+#:    성립한다. 어긋나면 레이아웃 해시 대조가 붙는 즉시 실패시키지만, 애초에 갈라지지
+#:    않도록 러너들은 :meth:`EnvOptions.for_policy` 를 통해서만 구성을 만든다.
+OBS_INCLUDE_SIDE_FLAG = True
+
 
 @dataclass
 class EnvOptions:
@@ -60,6 +71,10 @@ class EnvOptions:
     obs_include_side_flag: bool = False
     mirror_observations: bool = True
     edge_trigger_power_hit: bool = True
+    #: 뒤쪽 이만큼의 환경은 p1/p2 를 뒤바꿔 쓴다 (FR-3, plan.md §4). 0 이면 전부 (p1, p2).
+    swapped_envs: int = 0
+    #: FSM 의 boldness 고정값. -1 이면 매 랠리 추첨(원작). 진단용이다 (FR-13).
+    fixed_boldness: int = -1
     #: 항의 부호는 항 안에 있다. 가중치는 크기다 (plan.md §6.1).
     reward_weights: dict[str, float] = field(default_factory=lambda: {"rally_win": 1.0})
 
@@ -69,11 +84,34 @@ class EnvOptions:
             include_side_flag=self.obs_include_side_flag,
         )
 
+    @classmethod
+    def for_policy(cls, **kwargs: Any) -> EnvOptions:
+        """학습기·평가기 공용 구성 (FR-3, FR-14).
+
+        두 가지를 **기본으로** 준다:
+
+        - 진영 플래그 on (:data:`OBS_INCLUDE_SIDE_FLAG`)
+        - `swapped_envs` 를 주지 않으면 `num_envs // 2` — 벡터의 절반이 오른쪽 진영이다
+
+        러너가 직접 :class:`EnvOptions` 를 만들면 이 둘을 빠뜨릴 수 있고, 그 사고는
+        승률이 이상해지기 전까지 드러나지 않는다. 그래서 구성 생성을 한 곳으로 모은다.
+        """
+        kwargs.setdefault("obs_include_side_flag", OBS_INCLUDE_SIDE_FLAG)
+        options = cls(**kwargs)
+        if "swapped_envs" not in kwargs:
+            options.swapped_envs = options.num_envs // 2
+        return options
+
 
 _SLOT_KIND = {
     "external": env_pb2.SLOT_KIND_EXTERNAL,
     "fsm": env_pb2.SLOT_KIND_FSM,
 }
+
+
+def _external_sides(p1: str, p2: str) -> list[int]:
+    """`(p1, p2)` 구성에서 외부 슬롯이 차지하는 진영 번호. 슬롯 순서 그대로다."""
+    return [side for side, kind in enumerate((p1, p2)) if kind == "external"]
 
 
 class PikaVectorEnv(VectorEnv):
@@ -152,10 +190,15 @@ class PikaVectorEnv(VectorEnv):
         self._terms = np.zeros((self.num_envs, len(self.reward_term_names)), dtype=np.float32)
         self._scores = np.zeros((self.server_num_envs, 2), dtype=np.int32)
 
-        #: 슬롯 k 가 진영 몇 번인가 (점수를 내 시점으로 읽을 때 쓴다).
-        self._slot_to_side = [
-            side for side, kind in enumerate((self.options.p1, self.options.p2)) if kind == "external"
-        ]
+        # 슬롯이 어느 진영인가 — **환경마다 다르다** (plan.md §4.3).
+        # 뒤쪽 swapped_envs 개는 서버가 (p2, p1) 로 구성했으므로 슬롯 0 이 player2 다.
+        normal = _external_sides(self.options.p1, self.options.p2)
+        swapped = _external_sides(self.options.p2, self.options.p1)
+        swap_n = min(self.options.swapped_envs, self.server_num_envs)
+        #: `(server_num_envs, slot_count)` — 환경 i 슬롯 k 가 보는 진영 (0 왼쪽, 1 오른쪽).
+        self._slot_side = np.array(
+            [normal] * (self.server_num_envs - swap_n) + [swapped] * swap_n, dtype=np.intp,
+        ).reshape(self.server_num_envs, self.slot_count)
 
     # ── 구성 ────────────────────────────────────────────────────────────
 
@@ -178,6 +221,8 @@ class PikaVectorEnv(VectorEnv):
             obs_include_side_flag=options.obs_include_side_flag,
             mirror_observations=options.mirror_observations,
             edge_trigger_power_hit=options.edge_trigger_power_hit,
+            swapped_envs=options.swapped_envs,
+            fixed_boldness=options.fixed_boldness,
             reward_weights=weights,
         )
         return self._stub.Configure(request)
@@ -281,12 +326,31 @@ class PikaVectorEnv(VectorEnv):
             name: self._terms[:, i] for i, name in enumerate(self.reward_term_names)
         }
         # 점수를 슬롯 시점으로 바꿔 준다 (내 점수가 먼저).
-        sides = np.array(self._slot_to_side, dtype=np.intp)
-        mine = self._scores[:, sides].reshape(-1)
-        theirs = self._scores[:, 1 - sides].reshape(-1)
-        info["score_me"] = mine
-        info["score_opponent"] = theirs
+        # ⚠️ 진영이 환경마다 다르므로 열 인덱싱이 아니라 환경별 take 다 (plan.md §4.3).
+        info["score_me"] = np.take_along_axis(self._scores, self._slot_side, axis=1).reshape(-1)
+        info["score_opponent"] = np.take_along_axis(self._scores, 1 - self._slot_side, axis=1).reshape(-1)
+        info["side"] = self.slot_sides
         return info
+
+    # ── 관측 외의 것들 ──────────────────────────────────────────────────
+
+    @property
+    def slot_sides(self) -> np.ndarray:
+        """`(num_envs,)` — 펼쳐진 행 하나하나가 어느 진영인가 (0 왼쪽, 1 오른쪽).
+
+        진영별 메트릭을 나누는 기준이다 (FR-9). 앞 절반과 뒤 절반의 분포가 다르므로
+        (뒷벽이 20px 다르다 — PRD §2.4) 이것으로 나누지 않으면 한쪽의 실패가 평균에 묻힌다.
+        """
+        return self._slot_side.reshape(-1)
+
+    @property
+    def reward_terms(self) -> np.ndarray:
+        """`(num_envs, 5)` — 항별 **원시값**. 가중치는 적용되어 있지 않다 (FR-5).
+
+        ⚠️ **복사본**이다. 내부 버퍼는 스텝마다 덮어쓰이므로 롤아웃 버퍼가 참조를 들고
+           있으면 과거 스텝의 값이 조용히 바뀐다. 그 버그는 손실 곡선에 드러나지 않는다.
+        """
+        return self._terms.copy()
 
     # ── 진단 ────────────────────────────────────────────────────────────
 

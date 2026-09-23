@@ -66,9 +66,12 @@ class EnvServiceTest {
         baseSeed: Int = 11,
         p1: SlotKind = SlotKind.SLOT_KIND_EXTERNAL,
         p2: SlotKind = SlotKind.SLOT_KIND_FSM,
+        swappedEnvs: Int = 0,
+        fixedBoldness: Int = -1,
     ) = stub.configure(
         ConfigureRequest.newBuilder()
-            .setNumEnvs(numEnvs).setBaseSeed(baseSeed).setP1(p1).setP2(p2).build(),
+            .setNumEnvs(numEnvs).setBaseSeed(baseSeed).setP1(p1).setP2(p2)
+            .setSwappedEnvs(swappedEnvs).setFixedBoldness(fixedBoldness).build(),
     )
 
     private fun ByteString.asFloats(): FloatArray {
@@ -252,6 +255,89 @@ class EnvServiceTest {
                 .build(),
         )
         assertEquals(8, ok.terminated.size())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 진영 분할 · boldness (tasks.md P2, FR-3, FR-13)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("swapped_envs 가 in-process VectorEnv 로 그대로 내려간다")
+    fun swappedEnvsReachTheVector() {
+        val numEnvs = 4
+        val swapped = 2
+        val baseSeed = 31
+        val config = EnvConfig(slots = Slots.EXTERNAL_VS_FSM, baseSeed = baseSeed)
+
+        val expected = VectorEnv(config, numEnvs, swapped)
+        expected.reset()
+        configure(numEnvs = numEnvs, baseSeed = baseSeed, swappedEnvs = swapped)
+
+        val actions = EnvGolden.ActionSequence(1, numEnvs, expected.slotCount)
+        repeat(200) {
+            val batch = actions.next().copyOf()
+            expected.step(batch)
+            val reply = stub.step(StepRequest.newBuilder().setActions(ByteString.copyFrom(batch)).build())
+            assertFloatsEqual(expected.observations, reply.observations.asFloats(), "관측")
+            assertArrayEquals(expected.scores, reply.scores.asInts(), "점수")
+        }
+    }
+
+    @Test
+    @DisplayName("fixed_boldness 가 in-process VectorEnv 로 그대로 내려간다")
+    fun fixedBoldnessReachesTheVector() {
+        val baseSeed = 33
+        val config = EnvConfig(slots = Slots.EXTERNAL_VS_FSM, baseSeed = baseSeed, fixedBoldness = 3)
+
+        val expected = VectorEnv(config, 2)
+        expected.reset()
+        configure(numEnvs = 2, baseSeed = baseSeed, fixedBoldness = 3)
+
+        val actions = EnvGolden.ActionSequence(1, 2, expected.slotCount)
+        repeat(300) {
+            val batch = actions.next().copyOf()
+            expected.step(batch)
+            val reply = stub.step(StepRequest.newBuilder().setActions(ByteString.copyFrom(batch)).build())
+            assertFloatsEqual(expected.observations, reply.observations.asFloats(), "관측")
+        }
+    }
+
+    @Test
+    @DisplayName("두 필드를 비우면 기본값(0 · -1) 이고 기존 동작과 같다")
+    fun defaultsAreUnchanged() {
+        // ⚠️ 새 필드에 기본값이 아닌 값이 새어 들어가면 Phase 2 의 골든이 통째로 움직인다.
+        val reply = stub.configure(
+            ConfigureRequest.newBuilder().setNumEnvs(2).setBaseSeed(11)
+                .setP1(SlotKind.SLOT_KIND_EXTERNAL).setP2(SlotKind.SLOT_KIND_FSM).build(),
+        )
+        assertEquals(1, reply.slotCount)
+
+        val expected = VectorEnv(EnvConfig(slots = Slots.EXTERNAL_VS_FSM, baseSeed = 11), 2)
+        expected.reset()
+        val actions = EnvGolden.ActionSequence(1, 2, 1)
+        repeat(100) {
+            val batch = actions.next().copyOf()
+            expected.step(batch)
+            val step = stub.step(StepRequest.newBuilder().setActions(ByteString.copyFrom(batch)).build())
+            assertFloatsEqual(expected.observations, step.observations.asFloats(), "관측")
+        }
+    }
+
+    @Test
+    @DisplayName("범위를 벗어난 swapped_envs · fixed_boldness 는 INVALID_ARGUMENT")
+    fun outOfRangeFieldsAreRejected() {
+        for (bad in listOf(5, -1)) {
+            val e = assertThrows(StatusRuntimeException::class.java) {
+                configure(numEnvs = 4, swappedEnvs = bad)
+            }
+            assertEquals(Status.Code.INVALID_ARGUMENT, e.status.code, "swapped_envs = $bad")
+        }
+        for (bad in listOf(5, -2)) {
+            val e = assertThrows(StatusRuntimeException::class.java) {
+                configure(numEnvs = 4, fixedBoldness = bad)
+            }
+            assertEquals(Status.Code.INVALID_ARGUMENT, e.status.code, "fixed_boldness = $bad")
+        }
     }
 
     @Test

@@ -28,12 +28,14 @@ import pika.core.Rand
  * @param rand RNG. 라운드 리셋의 `computerBoldness` 추첨과 FSM 의사결정이 소비한다.
  * @param slots 두 진영의 구성. FSM 여부가 [pika.core.Player.isComputer] 로 내려간다.
  * @param firstServeIsPlayer2 첫 서브를 오른쪽이 하는가.
+ * @param fixedBoldness FSM 의 `computerBoldness` 고정값. 진영별로 따로 잡는다 ([FixedBoldness]).
  */
 class PikaGame(
     private val rand: Rand,
     val slots: Slots = Slots.FSM_VS_FSM,
     val winningScore: Int = 15,
     firstServeIsPlayer2: Boolean = false,
+    val fixedBoldness: FixedBoldness = FixedBoldness.RANDOM,
 ) {
     val physics: PikaPhysics = PikaPhysics(slots.p1.isFsm, slots.p2.isFsm, rand)
 
@@ -63,6 +65,9 @@ class PikaGame(
             "슬롯 구성과 엔진의 isComputer 가 어긋났습니다: slots=$slots, " +
                 "isComputer=(${physics.player1.isComputer}, ${physics.player2.isComputer})"
         }
+
+        // Player 생성자가 이미 initializeForNewRound() 를 돌려 boldness 를 뽑았다.
+        pinBoldness()
 
         // Ball 생성자는 isPlayer2Serve = false 로 초기화한다.
         // 첫 서브가 오른쪽이면 여기서 다시 잡는다. ⚠️ ball 초기화는 RNG 를 소비하지 않으므로
@@ -122,8 +127,25 @@ class PikaGame(
         physics.player1.initializeForNewRound()
         physics.player2.initializeForNewRound()
         physics.ball.initializeForNewRound(isPlayer2Serve)
+        pinBoldness()
         rallyFrames = 0
         rallyIndex++
+    }
+
+    /**
+     * [fixedBoldness] 가 주어졌으면 추첨 결과를 덮어쓴다. (FR-13)
+     *
+     * ⚠️ **추첨 자체(`rand.next() % 5`)는 막지 않는다.** 뽑고 나서 덮어쓴다.
+     *    막으면 난수 스트림이 한 칸씩 밀려 이 구성의 모든 랠리가 다른 경기가 되고,
+     *    "boldness 만 바꿨을 때 무엇이 달라지는가" 라는 질문 자체가 성립하지 않게 된다.
+     *
+     * 진영별로 값이 다를 수 있다 — `plan.md` §2.1 측정 2 의 FSM(b_left) × FSM(b_right)
+     * 행렬이 그것을 요구한다. External 슬롯의 `computerBoldness` 는 FSM 분기에서만
+     * 읽히므로 (`PhysicsEngine.kt:279` 이하) 값이 들어가도 아무 일도 일어나지 않는다.
+     */
+    private fun pinBoldness() {
+        if (fixedBoldness.p1 >= 0) physics.player1.computerBoldness = fixedBoldness.p1
+        if (fixedBoldness.p2 >= 0) physics.player2.computerBoldness = fixedBoldness.p2
     }
 
     /** 이긴 쪽(0/1). 게임이 안 끝났으면 null. */
@@ -133,4 +155,35 @@ class PikaGame(
             scores[0] >= winningScore -> 0
             else -> 1
         }
+}
+
+/**
+ * FSM `computerBoldness` 의 고정값. **진영별로 따로 잡는다.** (FR-13, `plan.md` §2.1)
+ *
+ * `-1` 은 원작대로 매 랠리 추첨한다 (`Player.initializeForNewRound` 의 `rand() % 5`).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 왜 값 하나가 아니라 쌍인가
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `plan.md` §2.1 의 측정 2 는 FSM(b_left) × FSM(b_right) **행렬**이다. 양쪽에 같은 값만
+ * 걸 수 있으면 그 행렬의 대각선밖에 재지 못하고, "boldness 는 난이도가 아니라 랠리 길이의
+ * 손잡이다" 라는 결론(그 표의 행·열 단조성)이 나오지 않는다.
+ *
+ * `EnvConfig.fixedBoldness` 는 여전히 값 하나다 — proto 필드가 하나이고, 학습 환경에서는
+ * FSM 이 한 진영에만 있기 때문이다. 쌍이 필요한 것은 FSM vs FSM 평가(진단)뿐이다.
+ */
+data class FixedBoldness(val p1: Int, val p2: Int = p1) {
+    init {
+        require(p1 == -1 || p1 in 0..4) { "fixedBoldness.p1 은 -1(추첨) 또는 0..4 여야 합니다: $p1" }
+        require(p2 == -1 || p2 in 0..4) { "fixedBoldness.p2 는 -1(추첨) 또는 0..4 여야 합니다: $p2" }
+    }
+
+    override fun toString(): String = if (p1 == p2) "b=${label(p1)}" else "b=(${label(p1)}, ${label(p2)})"
+
+    private fun label(b: Int) = if (b < 0) "추첨" else b.toString()
+
+    companion object {
+        /** 원작 동작 — 매 랠리 추첨. */
+        val RANDOM = FixedBoldness(-1)
+    }
 }

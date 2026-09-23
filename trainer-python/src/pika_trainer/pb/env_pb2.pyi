@@ -31,7 +31,7 @@ class RewardWeights(_message.Message):
     def __init__(self, rally_win: _Optional[float] = ..., ball_touch: _Optional[float] = ..., crossed_net: _Optional[float] = ..., opponent_miss: _Optional[float] = ..., time_penalty: _Optional[float] = ...) -> None: ...
 
 class ConfigureRequest(_message.Message):
-    __slots__ = ("num_envs", "base_seed", "p1", "p2", "winning_score", "max_rally_frames", "obs_include_expected_landing", "obs_include_side_flag", "mirror_observations", "edge_trigger_power_hit", "reward_weights")
+    __slots__ = ("num_envs", "base_seed", "p1", "p2", "winning_score", "max_rally_frames", "obs_include_expected_landing", "obs_include_side_flag", "mirror_observations", "edge_trigger_power_hit", "reward_weights", "swapped_envs", "fixed_boldness")
     NUM_ENVS_FIELD_NUMBER: _ClassVar[int]
     BASE_SEED_FIELD_NUMBER: _ClassVar[int]
     P1_FIELD_NUMBER: _ClassVar[int]
@@ -43,6 +43,8 @@ class ConfigureRequest(_message.Message):
     MIRROR_OBSERVATIONS_FIELD_NUMBER: _ClassVar[int]
     EDGE_TRIGGER_POWER_HIT_FIELD_NUMBER: _ClassVar[int]
     REWARD_WEIGHTS_FIELD_NUMBER: _ClassVar[int]
+    SWAPPED_ENVS_FIELD_NUMBER: _ClassVar[int]
+    FIXED_BOLDNESS_FIELD_NUMBER: _ClassVar[int]
     num_envs: int
     base_seed: int
     p1: SlotKind
@@ -54,7 +56,9 @@ class ConfigureRequest(_message.Message):
     mirror_observations: bool
     edge_trigger_power_hit: bool
     reward_weights: RewardWeights
-    def __init__(self, num_envs: _Optional[int] = ..., base_seed: _Optional[int] = ..., p1: _Optional[_Union[SlotKind, str]] = ..., p2: _Optional[_Union[SlotKind, str]] = ..., winning_score: _Optional[int] = ..., max_rally_frames: _Optional[int] = ..., obs_include_expected_landing: _Optional[bool] = ..., obs_include_side_flag: _Optional[bool] = ..., mirror_observations: _Optional[bool] = ..., edge_trigger_power_hit: _Optional[bool] = ..., reward_weights: _Optional[_Union[RewardWeights, _Mapping]] = ...) -> None: ...
+    swapped_envs: int
+    fixed_boldness: int
+    def __init__(self, num_envs: _Optional[int] = ..., base_seed: _Optional[int] = ..., p1: _Optional[_Union[SlotKind, str]] = ..., p2: _Optional[_Union[SlotKind, str]] = ..., winning_score: _Optional[int] = ..., max_rally_frames: _Optional[int] = ..., obs_include_expected_landing: _Optional[bool] = ..., obs_include_side_flag: _Optional[bool] = ..., mirror_observations: _Optional[bool] = ..., edge_trigger_power_hit: _Optional[bool] = ..., reward_weights: _Optional[_Union[RewardWeights, _Mapping]] = ..., swapped_envs: _Optional[int] = ..., fixed_boldness: _Optional[int] = ...) -> None: ...
 
 class ConfigureReply(_message.Message):
     __slots__ = ("num_envs", "slot_count", "obs_dim", "obs_layout_hash", "obs_field_names", "reward_term_names", "action_count", "session_id")

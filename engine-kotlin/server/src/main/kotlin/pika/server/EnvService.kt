@@ -66,6 +66,16 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                 val numEnvs = request.numEnvs
                 if (numEnvs <= 0) throw invalidArgument("num_envs 는 양수여야 합니다: $numEnvs")
 
+                // 진영 분할 (plan.md §4). 뒤쪽 이만큼의 환경이 p1/p2 를 뒤바꿔 쓴다.
+                val swappedEnvs = if (request.hasSwappedEnvs()) request.swappedEnvs else 0
+                if (swappedEnvs !in 0..numEnvs) {
+                    throw invalidArgument("swapped_envs 는 0..$numEnvs 여야 합니다: $swappedEnvs")
+                }
+                val fixedBoldness = if (request.hasFixedBoldness()) request.fixedBoldness else -1
+                if (fixedBoldness != -1 && fixedBoldness !in 0..4) {
+                    throw invalidArgument("fixed_boldness 는 -1(추첨) 또는 0..4 여야 합니다: $fixedBoldness")
+                }
+
                 val cfg = EnvConfig(
                     slots = Slots(request.p1.toSlot(default = Slot.External), request.p2.toSlot(default = Slot.Fsm)),
                     baseSeed = request.baseSeed,
@@ -81,6 +91,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                     if (request.hasMirrorObservations()) request.mirrorObservations else true,
                     edgeTriggerPowerHit =
                     if (request.hasEdgeTriggerPowerHit()) request.edgeTriggerPowerHit else true,
+                    fixedBoldness = fixedBoldness,
                     rewardWeights = if (request.hasRewardWeights()) {
                         val w = request.rewardWeights
                         RewardWeights(w.rallyWin, w.ballTouch, w.crossedNet, w.opponentMiss, w.timePenalty)
@@ -89,7 +100,7 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                     },
                 )
 
-                val v = VectorEnv(cfg, numEnvs)
+                val v = VectorEnv(cfg, numEnvs, swappedEnvs)
                 v.reset()
                 vec = v
                 config = cfg

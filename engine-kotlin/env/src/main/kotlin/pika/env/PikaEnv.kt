@@ -95,6 +95,7 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
             // 첫 서브를 게임마다 번갈아 준다. 난수를 쓰지 않는 이유는 그 한 번의 소비가
             // 랠리 시드의 의미(=오직 (baseSeed, i, k) 의 함수) 를 흐리기 때문이다.
             firstServeIsPlayer2 = gameCounter % 2 == 1,
+            fixedBoldness = FixedBoldness(config.fixedBoldness),
         )
         gameCounter++
         beginRally()
