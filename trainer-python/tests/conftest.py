@@ -5,44 +5,25 @@
 구는가" 가 아니라 "이 서버에 붙은 클라이언트가 규약대로 구는가" 다.
 
 이미 떠 있는 서버를 쓰려면 ``PIKA_ENV_TARGET`` 을 준다 (compose 테스트가 그렇게 한다).
+
+⚠️ 기동 로직은 `pika_trainer.server_process` 에 있다 — **평가기(`evaluate.py`)가 같은 것을
+   필요로 하기 때문이다** (plan.md §9.3). 테스트 전용 사본을 따로 두면 둘이 갈라지고,
+   "테스트에서는 되는데 평가에서는 안 되는" 차이가 생긴다.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
-import tempfile
-import time
 from collections.abc import Iterator
 from pathlib import Path
 
-import grpc
 import pytest
 
-from pika_trainer.pb import env_pb2, env_pb2_grpc
+from pika_trainer.server_process import launch_server, repo_root, wait_until_healthy
 
 
-def repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "settings.gradle.kts").exists():
-            return parent
-    raise RuntimeError("저장소 루트를 찾지 못했습니다")
-
-
-def _wait_until_healthy(target: str, timeout_s: float = 60.0) -> None:
-    deadline = time.monotonic() + timeout_s
-    last: Exception | None = None
-    with grpc.insecure_channel(target) as channel:
-        stub = env_pb2_grpc.PikaEnvStub(channel)
-        while time.monotonic() < deadline:
-            try:
-                stub.Health(env_pb2.HealthRequest(), timeout=1.0)
-                return
-            except grpc.RpcError as e:  # 서버가 아직 안 떴다
-                last = e
-                time.sleep(0.1)
-    raise RuntimeError(f"서버가 {timeout_s}s 안에 뜨지 않았습니다: {last}")
+def _repo_root() -> Path:
+    return repo_root(Path(__file__))
 
 
 @pytest.fixture(scope="session")
@@ -55,41 +36,15 @@ def env_target() -> Iterator[str]:
     """
     external = os.environ.get("PIKA_ENV_TARGET")
     if external:
-        _wait_until_healthy(external)
+        wait_until_healthy(external)
         yield external
         return
 
-    root = repo_root()
-    launcher = root / "engine-kotlin/server/build/install/server/bin/server"
-    gradlew = root / "gradlew"
-
-    # ⚠️ **항상** 다시 빌드한다. "있으면 재사용" 으로 두면 옛 서버 바이너리를 상대로
-    #    테스트가 돌고, 계약을 바꾼 날 빨간불이 안 뜬다 (한 번 겪었다 — 세션 번호를
-    #    추가했는데 테스트는 그 전 배포본과 말하고 있었다).
-    #    Gradle 은 up-to-date 면 즉시 끝난다.
-    if gradlew.exists():
-        subprocess.run(
-            [str(gradlew), ":engine-kotlin:server:installDist", "-q"],
-            cwd=root, check=True,
-        )
-    elif not launcher.exists():
-        pytest.skip("엔진 서버 배포본도 gradlew 도 없습니다")
-
-    socket_dir = tempfile.mkdtemp(prefix="pika-")
-    # UDS 경로에는 길이 제한(약 104바이트)이 있다. 짧게 잡는다.
-    socket_path = os.path.join(socket_dir, "s.sock")
-    process = subprocess.Popen(
-        [str(launcher), "--uds", socket_path],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-    )
-    target = f"unix://{socket_path}"
+    # ⚠️ **항상** 다시 빌드한다 (`build=True`). "있으면 재사용" 으로 두면 옛 서버 바이너리를
+    #    상대로 테스트가 돌고, 계약을 바꾼 날 빨간불이 안 뜬다 (한 번 겪었다 — 세션 번호를
+    #    추가했는데 테스트는 그 전 배포본과 말하고 있었다). Gradle 은 up-to-date 면 즉시 끝난다.
     try:
-        _wait_until_healthy(target)
-        yield target
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        shutil.rmtree(socket_dir, ignore_errors=True)
+        with launch_server(root=_repo_root()) as target:
+            yield target
+    except RuntimeError as e:
+        pytest.skip(str(e))
