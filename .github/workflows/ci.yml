@@ -55,6 +55,11 @@ jobs:
         with:
           enable-cache: true
 
+      # torch(Phase 3) 가 여기 들어온다. **CPU 휠 187 MB** 다 — 기본 PyPI 휠이었다면
+      # CUDA 런타임까지 약 2.5 GB 였다. 분기는 `pyproject.toml` 의 pytorch-cpu 인덱스에
+      # 있고, `enable-cache: true` 덕분에 두 번째 실행부터는 거의 공짜다.
+      # ⚠️ `--group dev` 만 설치해 torch 를 빼면 net/rollout/ppo 테스트가 통째로 빠진다.
+      #    187 MB 보다 그쪽이 비싸다.
       - run: uv sync --locked
 
       - run: uv run pytest
