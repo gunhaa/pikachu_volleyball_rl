@@ -1,6 +1,6 @@
 # pikachu-volleyball-rl
 
-피카츄 발리볼을 강화학습으로 푸는 프로젝트.
+피카츄 발리볼 강화학습 프로젝트.
 
 물리 엔진을 Kotlin 으로 포팅하고, JS 원본을 정답(oracle)으로 둔 차분 테스트로
 동치성을 증명한 뒤, 그 위에서 PPO 로 정책을 학습한다.
@@ -158,6 +158,45 @@ print(s.field_names())
 
 ---
 
+## 학습 (Phase 3)
+
+랜덤 초기화에서 PPO 로 FSM(컴퓨터)을 이긴다. 결과는
+[`ROADMAP.md`](ROADMAP.md) 의 Phase 3 과 `history/2026-09-23-track-a-ppo/` 에 있다.
+
+```bash
+scripts/train-track-a.sh                      # 본 학습 (5천만 step, 시드 0 — 약 6분)
+SEED=1 scripts/train-track-a.sh               # 시드만 바꿔 재현
+STEPS=5000000 scripts/train-track-a.sh        # 짧은 런 (배선 점검)
+GAMMA=0.99 RUN_ID=ab-g099 scripts/train-track-a.sh   # A/B
+```
+
+> ⚠️ 러너는 **JVM 을 둘** 띄운다. 서버가 단일 테넌트라서 주기 평가가 학습 서버에
+> `Configure` 를 부르면 그 자리에서 학습 세션이 죽는다. 이미 떠 있는 서버를 쓰려면
+> `PIKA_ENV_TARGET` 과 `PIKA_EVAL_TARGET` 을 **둘 다** 준다.
+
+산출물은 `runs/<run-id>/` 에 쌓인다 (`.gitignore` 대상):
+
+```
+config.json      하이퍼파라미터 · 시드 · git 해시
+metrics.jsonl    반복당 한 줄 — 손실·KL·진영별 랠리 승률·항별 보상 기여·행동 분포
+evals.jsonl      평가 한 번당 한 줄
+ckpt-<steps>.pt  가중치 + 옵티마이저 + 재현 정보
+```
+
+체크포인트를 게임 단위로 채점한다. **평가는 체크포인트만 있으면 재현된다.**
+
+```bash
+scripts/eval-policy.sh runs/track-a-seed0/ckpt-final.pt
+scripts/eval-policy.sh --random                              # 기준선 (0/400)
+GAMES=400 BOLDNESS=1 scripts/eval-policy.sh runs/.../ckpt-final.pt   # boldness 진단 축
+```
+
+> ⚠️ 승률은 **언제나 양 진영에서** 재고 따로 보고한다. 진영은 교락변수다 — 벽 반사 조건
+> 한 줄이 비대칭이라 내 진영의 폭이 왼쪽 196px · 오른쪽 216px 로 다르다. 한 진영에서만
+> 재면 승률이 실력이 아니라 진영을 재게 된다.
+
+---
+
 ## 구조
 
 ```
@@ -169,7 +208,10 @@ scripts/
   fetch-upstream.sh         업스트림 고정 커밋 fetch
   coverage.sh               physics.js 커버리지 측정
   bench-env.sh              처리량 (a)(b)(c) 세 지점 측정
+  bench-train.sh            학습 예산 측정 (정책 forward · 스레드 · 업데이트 · 종단)
   gen-python-proto.sh       env.proto → Python stub 생성
+  train-track-a.sh          Track A 학습 · A/B · 재개
+  eval-policy.sh            체크포인트를 게임 단위로 평가
 tools/js-oracle/            Node 오라클 — physics.js 를 정답으로 돌린다
 tools/targeted-cases.txt    표적 케이스 표 — JS·Kotlin 이 함께 읽는다
 engine-kotlin/
@@ -184,6 +226,14 @@ trainer-python/
     obs_spec.py             obs_spec.proto 파서 (레이아웃 대조)
     env_client.py           Gymnasium VectorEnv
     bench_client.py         (c) 종단 처리량 벤치
+    net.py                  정책·가치망 (환경을 모른다)
+    rollout.py              롤아웃 버퍼 · autoreset 마스킹 · GAE (환경을 모른다)
+    ppo.py                  PPO 손실과 업데이트 (**상대를 모른다** — Track B 가 재사용한다)
+    schedules.py            LR · 엔트로피 · 셰이핑 스케줄
+    metrics.py              JSONL 로거 · 런 디렉터리 규약
+    track_a.py              Track A 러너 (알고리즘이 아니라 배선과 기록)
+    evaluate.py             게임 단위 평가 — 양 진영 · 미결 규칙 · boldness 축
+    server_process.py       평가 전용 서버 기동
     pb/                     env.proto 에서 생성된 stub (커밋 대상)
 deploy/compose/             엔진 서버 이미지와 compose
 ```
