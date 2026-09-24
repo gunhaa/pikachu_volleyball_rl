@@ -13,19 +13,19 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 경기를 바이트로 적고 다시 같은 경기로 돌린다. (FR-1~5, M4-a 단위판, NFR-1 · NFR-2)
 
-- [ ] `env/replay/Replay.kt` — 데이터 클래스, `SeedMode { GAME, RALLY }` (`plan.md` §3.1)
-- [ ] `ReplayCodec` — 인코드 / 디코드, magic · version 검사, 알 수 없는 버전은 예외
-- [ ] `ReplayRecorder` — begin/frame/endRally/endGame, 상한 60,000 에서 `ended = false` (§4.1)
-- [ ] `ReplayPlayer` — 두 시드 규약, `PikaGame` 재사용, 기록된 랠리 결과와 대조 (§4.2)
-- [ ] `PikaEnv` 배선 — `recorder` 가 null 이면 기존 경로 그대로. autoreset 스텝은 기록하지 않는다 (§3.3)
-- [ ] `GameEvaluator.playGame` 배선 — 선택 인자 `recorder`
-- [ ] `VectorEnv` — 끝난 게임 큐 `(envIndex, gameInEnv, Replay)`
-- [ ] 테스트: 코덱 왕복 (바이트 → 객체 → 바이트 동일)
-- [ ] 테스트: `PikaEnv` 기록 → 재생 일치 (무작위 External, 진영 좌·우)
-- [ ] 테스트: `GameEvaluator` FSM vs FSM 기록 → 재생 일치
-- [ ] 테스트: truncation (`maxRallyFrames = 200`), boldness 고정, 미완 게임 (cap = 500)
-- [ ] 테스트: 기록을 켜도 관측 · 보상 바이트 동일
-- [ ] **확인**: `./gradlew :engine-kotlin:env:test` 초록, env 골든 11 · Phase 1 골든 615 불변
+- [x] `env/replay/Replay.kt` — 데이터 클래스, `SeedMode { GAME, RALLY }` (`plan.md` §3.1)
+- [x] `ReplayCodec` — 인코드 / 디코드, magic · version 검사, 알 수 없는 버전은 예외
+- [x] `ReplayRecorder` — begin/frame/endRally/endGame, 상한 60,000 에서 `ended = false` (§4.1)
+- [x] `ReplayPlayer` — 두 시드 규약, `PikaGame` 재사용, 기록된 랠리 결과와 대조 (§4.2)
+- [x] `PikaEnv` 배선 — `recorder` 가 null 이면 기존 경로 그대로. autoreset 스텝은 기록하지 않는다 (§3.3)
+- [x] `GameEvaluator.playGame` 배선 — 선택 인자 `recorder`
+- [x] `VectorEnv` — 끝난 게임 큐 `(envIndex, gameInEnv, Replay)`
+- [x] 테스트: 코덱 왕복 (바이트 → 객체 → 바이트 동일)
+- [x] 테스트: `PikaEnv` 기록 → 재생 일치 (무작위 External, 진영 좌·우)
+- [x] 테스트: `GameEvaluator` FSM vs FSM 기록 → 재생 일치
+- [x] 테스트: truncation (`maxRallyFrames = 200`), boldness 고정, 미완 게임 (cap = 500)
+- [x] 테스트: 기록을 켜도 관측 · 보상 바이트 동일
+- [x] **확인**: `./gradlew :engine-kotlin:env:test` 초록, env 골든 11 · Phase 1 골든 615 불변
 
 ## P2. JS 경기 러너 · 입력원 · 교차 언어 동치
 

@@ -1,5 +1,9 @@
 package pika.env
 
+import pika.env.replay.Replay
+import pika.env.replay.ReplayRecorder
+import pika.env.replay.SeedMode
+
 /**
  * N개의 [PikaEnv] 를 배열로 들고 한 번에 스텝한다. (FR-9)
  *
@@ -24,8 +28,20 @@ package pika.env
  * ⚠️ **뒤쪽**인 이유: 시드는 `deriveSeed(baseSeed, envIndex, k)` 로 유도된다. 앞쪽을
  *    바꾸면 기존 시드 배치가 통째로 밀려 Phase 2 의 결정론 골든(M2-d)과 비교할 수 없게 된다.
  *    뒤에 붙이면 `swappedEnvs = 0` 이 기존 동작과 **바이트 단위로** 같다.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 리플레이 기록 (Phase 4 FR-2, plan.md §4.1)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * [recordReplays] 면 환경마다 [ReplayRecorder] 를 달고, 끝난(또는 상한에서 잘린) 게임을
+ * `(envIndex, gameInEnv, Replay)` 로 큐에 쌓는다. [drainReplays] 가 큐를 비운다.
+ * 어느 게임을 집계에 넣을지는 호출자(Python `evaluate.py`)가 `(envIndex, gameInEnv)` 로 고른다.
  */
-class VectorEnv(config: EnvConfig, val numEnvs: Int, val swappedEnvs: Int = 0) {
+class VectorEnv(
+    config: EnvConfig,
+    val numEnvs: Int,
+    val swappedEnvs: Int = 0,
+    val recordReplays: Boolean = false,
+) {
 
     var config: EnvConfig = config
         private set
@@ -43,7 +59,22 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int, val swappedEnvs: Int = 0) {
         if (i >= numEnvs - swappedEnvs) config.copy(slots = Slots(config.slots.p2, config.slots.p1))
         else config
 
-    private var envs: Array<PikaEnv> = Array(numEnvs) { PikaEnv(configFor(it), it) }
+    /** 기록된 게임. 환경 [envIndex] 의 [gameInEnv] 번째 게임 (리셋 이후 0부터). */
+    class RecordedGame(val envIndex: Int, val gameInEnv: Int, val replay: Replay)
+
+    private val recorded = ArrayDeque<RecordedGame>()
+
+    private fun makeEnv(i: Int): PikaEnv {
+        if (!recordReplays) return PikaEnv(configFor(i), i)
+        lateinit var env: PikaEnv
+        // sink 는 게임이 끝나거나 잘린 그 스텝 안에서 불린다 — 아직 다음 게임을 시작하기 전이라
+        // gameCounter - 1 이 이 게임의 번호다.
+        val recorder = ReplayRecorder(SeedMode.RALLY) { recorded.addLast(RecordedGame(i, env.gameCounter - 1, it)) }
+        env = PikaEnv(configFor(i), i, recorder)
+        return env
+    }
+
+    private var envs: Array<PikaEnv> = Array(numEnvs) { makeEnv(it) }
 
     /** `numEnvs × slotCount × obsDim` (float32). */
     val observations: FloatArray = FloatArray(numEnvs * slotCount * obsDim)
@@ -91,7 +122,8 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int, val swappedEnvs: Int = 0) {
      */
     fun reset(baseSeed: Int = config.baseSeed) {
         if (baseSeed != config.baseSeed) config = config.copy(baseSeed = baseSeed)
-        envs = Array(numEnvs) { PikaEnv(configFor(it), it) }
+        envs = Array(numEnvs) { makeEnv(it) }
+        recorded.clear()
         for (i in 0 until numEnvs) {
             envs[i].reset(observations, i * slotCount * obsDim)
             terminated[i] = 0
@@ -133,6 +165,13 @@ class VectorEnv(config: EnvConfig, val numEnvs: Int, val swappedEnvs: Int = 0) {
             scores[i * 2] = s[0]
             scores[i * 2 + 1] = s[1]
         }
+    }
+
+    /** 쌓인 기록을 전부 꺼내고 큐를 비운다. 기록이 꺼져 있으면 항상 빈 목록이다. */
+    fun drainReplays(): List<RecordedGame> {
+        val out = recorded.toList()
+        recorded.clear()
+        return out
     }
 
     /** 진단용. 환경 하나를 들여다본다. */

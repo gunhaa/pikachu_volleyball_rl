@@ -4,6 +4,9 @@ import pika.core.GROUND_HALF_WIDTH
 import pika.core.PikaUserInput
 import pika.core.Rand
 import pika.core.XorShift32
+import pika.env.replay.RallyOutcome
+import pika.env.replay.RecordedConfig
+import pika.env.replay.ReplayRecorder
 
 /**
  * RL 환경 하나. **에피소드 = 랠리**다. (FR-7, FR-9)
@@ -28,8 +31,10 @@ import pika.core.XorShift32
  * 벡터 크기로 시드를 나눠 쓰면 N 을 바꾸는 순간 실험이 재현되지 않는다.
  *
  * @param envIndex 벡터 안에서의 위치. 시드 유도에 들어간다.
+ * @param recorder 리플레이 기록기 (RALLY 규약). null 이면 기록하지 않고 기존 경로와 한 줄도
+ *   다르지 않다 (Phase 4 NFR-1). autoreset 스텝은 물리가 돌지 않으므로 프레임으로 적지 않는다.
  */
-class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
+class PikaEnv(val config: EnvConfig, val envIndex: Int = 0, private val recorder: ReplayRecorder? = null) {
 
     val encoder: ObsEncoder = ObsEncoder(config.obs, config.mirrorObservations, config.winningScore)
     val obsDim: Int = encoder.dim
@@ -87,7 +92,8 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
     }
 
     private fun startGame() {
-        rng = XorShift32(deriveSeed(config.baseSeed, envIndex, rallyCounter))
+        val seed = deriveSeed(config.baseSeed, envIndex, rallyCounter)
+        rng = XorShift32(seed)
         game = PikaGame(
             rand = rand,
             slots = config.slots,
@@ -96,6 +102,17 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
             // 랠리 시드의 의미(=오직 (baseSeed, i, k) 의 함수) 를 흐리기 때문이다.
             firstServeIsPlayer2 = gameCounter % 2 == 1,
             fixedBoldness = FixedBoldness(config.fixedBoldness),
+        )
+        recorder?.beginGame(
+            seed,
+            RecordedConfig(
+                slots = config.slots,
+                winningScore = config.winningScore,
+                firstServeIsPlayer2 = gameCounter % 2 == 1,
+                fixedBoldness = game.fixedBoldness,
+                maxRallyFrames = config.maxRallyFrames,
+                edgeTrigger = config.edgeTriggerPowerHit,
+            ),
         )
         gameCounter++
         beginRally()
@@ -122,7 +139,9 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
             startGame()
         } else {
             // 랠리마다 시드를 다시 잡는다 — 그래야 환경 i 의 랠리 k 가 벡터 크기와 무관해진다.
-            rng = XorShift32(deriveSeed(config.baseSeed, envIndex, rallyCounter))
+            val seed = deriveSeed(config.baseSeed, envIndex, rallyCounter)
+            rng = XorShift32(seed)
+            recorder?.beginRally(seed)
             game.startNextRally()
             beginRally()
         }
@@ -175,7 +194,8 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
         val touchedBefore1 = physics.player2.isCollisionWithBallHappened
         val ballXBefore = physics.ball.x
 
-        // (4) 물리 한 프레임
+        // (4) 물리 한 프레임. 기록은 step **직전** — step 안에서 FSM 슬롯 입력이 덮어써진다.
+        recorder?.frame(inputs)
         val scorer = game.step(inputs)
 
         // (5) 보상 항
@@ -189,6 +209,11 @@ class PikaEnv(val config: EnvConfig, val envIndex: Int = 0) {
 
         val terminated = scorer != null
         val truncated = !terminated && config.maxRallyFrames > 0 && game.rallyFrames >= config.maxRallyFrames
+        if (recorder != null) {
+            if (scorer != null) recorder.endRally(scorer)
+            if (truncated) recorder.endRally(RallyOutcome.TRUNCATED)
+            if (game.gameEnded) recorder.endGame()
+        }
 
         for (k in externalSlots.indices) {
             val slot = externalSlots[k]

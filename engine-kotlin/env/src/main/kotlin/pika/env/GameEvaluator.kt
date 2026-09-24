@@ -3,6 +3,10 @@ package pika.env
 import pika.core.PikaUserInput
 import pika.core.Rand
 import pika.core.XorShift32
+import pika.env.replay.RallyOutcome
+import pika.env.replay.RecordedConfig
+import pika.env.replay.ReplayRecorder
+import pika.env.replay.SeedMode
 
 /**
  * 15점제 게임 단위의 평가. (FR-13, plan.md §6.3)
@@ -83,6 +87,7 @@ object GameEvaluator {
      * @param maxGameFrames 안전장치. 넘으면 예외다. 평가가 조용히 멈추는 것보다 낫다.
      * @param fixedBoldness FSM 의 boldness 고정값. **진영별로 다르게 줄 수 있다** —
      *   `plan.md` §2.1 측정 2 의 FSM(b_left) × FSM(b_right) 행렬이 그것을 요구한다 (FR-13).
+     * @param recorder 리플레이 기록기 (GAME 규약). null 이면 기록하지 않는다 (Phase 4 FR-2).
      */
     fun playGame(
         seed: Int,
@@ -94,13 +99,19 @@ object GameEvaluator {
         maxRallyFrames: Int = 0,
         maxGameFrames: Long = 2_000_000,
         fixedBoldness: FixedBoldness = FixedBoldness.RANDOM,
+        recorder: ReplayRecorder? = null,
     ): GameOutcome {
         requireController(slots.p1, p1, "player1")
         requireController(slots.p2, p2, "player2")
+        require(recorder == null || recorder.seedMode == SeedMode.GAME) { "playGame 은 GAME 규약입니다" }
 
         val rng = XorShift32(seed)
         val game = PikaGame(Rand { rng.nextRand() }, slots, winningScore, firstServeIsPlayer2, fixedBoldness)
         val inputs = arrayOf(PikaUserInput(), PikaUserInput())
+        recorder?.beginGame(
+            seed,
+            RecordedConfig(slots, winningScore, firstServeIsPlayer2, fixedBoldness, maxRallyFrames),
+        )
 
         var frames = 0L
         var rallies = 0
@@ -111,6 +122,7 @@ object GameEvaluator {
             if (!slots.p1.isFsm) p1!!.decide(game, false, inputs[0])
             if (!slots.p2.isFsm) p2!!.decide(game, true, inputs[1])
 
+            recorder?.frame(inputs)
             val scorer = game.step(inputs)
             frames++
             check(frames <= maxGameFrames) {
@@ -120,13 +132,16 @@ object GameEvaluator {
 
             if (scorer != null) {
                 rallies++
+                recorder?.endRally(scorer)
                 if (!game.gameEnded) game.startNextRally()
             } else if (maxRallyFrames > 0 && game.rallyFrames >= maxRallyFrames) {
+                recorder?.endRally(RallyOutcome.TRUNCATED)
                 truncated++
                 rallies++
                 game.startNextRally()
             }
         }
+        recorder?.endGame()
         return GameOutcome(game.winner!!, game.scores.copyOf(), rallies, frames, truncated)
     }
 
