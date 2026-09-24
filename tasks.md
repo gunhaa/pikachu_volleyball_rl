@@ -14,14 +14,14 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > JS 관측을 대조할 정답을 만든다. 정책이 **행동을 정하는 순간의** 관측만 담는다. (FR-1, M5-a 의 기준, NFR-1)
 
-- [ ] `env/ObsGolden.kt` — `EnvGolden.CASES` 11 구성 + `side-flag-right` · `side-flag-both` (`plan.md` §3.2)
-- [ ] 결정 관측 수집 — autoreset 스텝이 내보낸 관측을 "다음 결정" 으로 잇는다, terminal 관측 제외 (§3.1, §3.3 ⚠️)
-- [ ] 환경별 `ReplayRecorder` (RALLY) — 게임마다 한 파일, 케이스 끝의 진행 중 게임은 상한 컷
-- [ ] `golden/obs/chains.json` + `.pkr` 생성, `writeObsGolden` Gradle 태스크
-- [ ] `ObsGoldenTest` — 체인 · 리플레이 바이트 · 케이스 목록이 EnvGolden 이름을 전부 포함 (§3.4)
-- [ ] 테스트: `side-flag-right` 가 실제로 미러 + 진영 플래그 +1 을 밟는다 (관측 한 개를 꺼내 필드로 확인)
-- [ ] 테스트: 결정 수 = 물리 프레임 수 (autoreset 스텝을 세지 않는다)
-- [ ] **확인**: `./gradlew :engine-kotlin:env:test` 초록, `env-chain-hashes.txt` · Phase 1 골든 · 리플레이 골든 **파일 무변경** (`git diff --stat`)
+- [x] `env/ObsGolden.kt` — `EnvGolden.CASES` 11 구성 + `side-flag-right` · `side-flag-both` (`plan.md` §3.2)
+- [x] 결정 관측 수집 — autoreset 스텝이 내보낸 관측을 "다음 결정" 으로 잇는다, terminal 관측 제외 (§3.1, §3.3 ⚠️)
+- [x] 환경별 `ReplayRecorder` (RALLY) — 게임마다 한 파일, 케이스 끝의 진행 중 게임은 상한 컷
+- [x] `golden/obs/chains.json` + `.pkr` 생성, `writeObsGolden` Gradle 태스크
+- [x] `ObsGoldenTest` — 체인 · 리플레이 바이트 · 케이스 목록이 EnvGolden 이름을 전부 포함 (§3.4)
+- [x] 테스트: `side-flag-right` 가 실제로 미러 + 진영 플래그 +1 을 밟는다 (관측 한 개를 꺼내 필드로 확인)
+- [x] 테스트: 결정 수 = 물리 프레임 수 (autoreset 스텝을 세지 않는다)
+- [x] **확인**: `./gradlew :engine-kotlin:env:test` 초록, `env-chain-hashes.txt` · Phase 1 골든 · 리플레이 골든 **파일 무변경** (`git diff --stat`)
 
 ## P2. JS 관측 · 시드 유도 (M5-a)
 

@@ -77,3 +77,16 @@ tasks.register<JavaExec>("benchEnv") {
     classpath = sourceSets["main"].runtimeClasspath
     systemProperty("repo.root", rootProject.projectDir.absolutePath)
 }
+
+/**
+ * 결정 관측 골든 재생성. (Phase 5 P1, plan.md §3.4)
+ *
+ * ⚠️ writeEnvGolden 과 같은 규칙 — 의도한 변경일 때만 돌리고 이유를 커밋 메시지에 적는다.
+ */
+tasks.register<JavaExec>("writeObsGolden") {
+    group = "verification"
+    description = "결정 관측 골든(체인 + 리플레이)을 다시 만든다. 이유를 커밋 메시지에 적을 것."
+    mainClass.set("pika.env.ObsGoldenMain")
+    classpath = sourceSets["main"].runtimeClasspath
+    systemProperty("repo.root", rootProject.projectDir.absolutePath)
+}

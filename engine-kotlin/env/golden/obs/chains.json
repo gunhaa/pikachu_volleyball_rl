@@ -1,0 +1,56 @@
+{
+  "spec": "결정 관측 · h0 = 0x00*32 · h_n = SHA256(h_{n-1} || slot(u8) || obs_n(f32 LE)) · 외부 슬롯 왼쪽→오른쪽 · terminal 관측 제외",
+  "cases": [
+    {"name":"trackA","frames":2000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["trackA-e0-g0.pkr","trackA-e0-g1.pkr"],"decisions":1975,"chain":"1c7e769c329391917482cf007d68bbcbdc3230af2b50b5aefb66e2d1a8ba7598"},
+      {"envIndex":1,"games":["trackA-e1-g0.pkr","trackA-e1-g1.pkr","trackA-e1-g2.pkr"],"decisions":1969,"chain":"5ea9038c50a650e0d871df73a08395193857d496bfad9700e70de823892d8101"}
+    ]},
+    {"name":"trackA-right","frames":2000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["trackA-right-e0-g0.pkr","trackA-right-e0-g1.pkr"],"decisions":1973,"chain":"2ffa7c2d3f37850969a3570bb7fcd84cfaaf67beb59d595e8d914f47576a550d"},
+      {"envIndex":1,"games":["trackA-right-e1-g0.pkr","trackA-right-e1-g1.pkr","trackA-right-e1-g2.pkr"],"decisions":1965,"chain":"ea6ebe59a989905a94690cb83ff26c92f4a75d9c92e6830377b8e5945a3e3d57"}
+    ]},
+    {"name":"trackB","frames":2000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["trackB-e0-g0.pkr","trackB-e0-g1.pkr"],"decisions":1966,"chain":"3a0393dbf0616ed3947e033c917af15090198225939ec7371f3dbb2ce1435e25"},
+      {"envIndex":1,"games":["trackB-e1-g0.pkr","trackB-e1-g1.pkr"],"decisions":1963,"chain":"e0dc908a33385bf6ff8a2941535317b760db5bf2a731fc4d9bd118ccfe83b7b7"}
+    ]},
+    {"name":"no-mirror","frames":1000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":false,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["no-mirror-e0-g0.pkr"],"decisions":982,"chain":"4c02b2987f0ac79c5462756b794e5e8fe260c2214990a770d4e5f1e22eff0ff1"},
+      {"envIndex":1,"games":["no-mirror-e1-g0.pkr"],"decisions":982,"chain":"3df5ca7473ab4ad8f98dbc9d61ebf90b171dd9d195f6e77bc211a84703fb0cc9"}
+    ]},
+    {"name":"no-landing","frames":1000,"layoutHash":"09f56ba733823338baf7b10510e75a1d7d9291e30d3180652649f4e9fb7175e7","dim":39,"obs":{"includeLanding":false,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["no-landing-e0-g0.pkr"],"decisions":992,"chain":"68736b7e5d7752552e5c549cfa9181a5da9f1a27cf9fc0ba488b2e08e6006a57"},
+      {"envIndex":1,"games":["no-landing-e1-g0.pkr","no-landing-e1-g1.pkr"],"decisions":982,"chain":"1a9ee5a0ee1f7cf6ceb364ccaa27f6d476399aa2362dc12a034b4bb90bd7c218"}
+    ]},
+    {"name":"side-flag","frames":1000,"layoutHash":"d696c0b3b96085b8dec3d08eda416e297263d2072c88c65f570b6f007f7dcd9d","dim":41,"obs":{"includeLanding":true,"includeSideFlag":true,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["side-flag-e0-g0.pkr"],"decisions":992,"chain":"272c014eda62ade9da7d2eccf4844e550b16496c46a85eda51944f161b3ac275"},
+      {"envIndex":1,"games":["side-flag-e1-g0.pkr","side-flag-e1-g1.pkr"],"decisions":982,"chain":"e780ba4ccbecb93ca5164a11784a3e0f688e802875b20a8bd44356b569e0e601"}
+    ]},
+    {"name":"no-edge-trigger","frames":1000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["no-edge-trigger-e0-g0.pkr","no-edge-trigger-e0-g1.pkr"],"decisions":984,"chain":"58102bea2cb7742966cba69781fc526712a1b01f1c38c96460fe063819955395"},
+      {"envIndex":1,"games":["no-edge-trigger-e1-g0.pkr","no-edge-trigger-e1-g1.pkr"],"decisions":982,"chain":"1323edb3a4caf21d62bd7968ad515b07ad2336f505a5cccf0f22006078246403"}
+    ]},
+    {"name":"truncating","frames":1000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["truncating-e0-g0.pkr","truncating-e0-g1.pkr"],"decisions":977,"chain":"75eff17454b5f5e8207fa6b4b36dd6ab953090e01d50645f8a1dd3c4d2dab339"},
+      {"envIndex":1,"games":["truncating-e1-g0.pkr","truncating-e1-g1.pkr"],"decisions":977,"chain":"49cbd02e97d61de90a038bd300cbc82eaa28b77c3416af6060fbfb4d51cf420f"}
+    ]},
+    {"name":"shaped","frames":1000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["shaped-e0-g0.pkr"],"decisions":982,"chain":"62711caf3db7f4a382b0c7d3b5804bfde54c7327b5e8091d9960eb2431e062bc"},
+      {"envIndex":1,"games":["shaped-e1-g0.pkr"],"decisions":982,"chain":"d4ec8260cfb0149d5e0befde15c6a6d809f4bc8a47de04f9876a4941525ca5b9"}
+    ]},
+    {"name":"seed-7","frames":1000,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["seed-7-e0-g0.pkr"],"decisions":992,"chain":"40e27fb968bc5513299e7f98a01613df9ea55501da9e674df12f9001c2757175"}
+    ]},
+    {"name":"wide","frames":500,"layoutHash":"1fc9285c31b66f2c2311f91c3802742fe802f18ccb55d1b7c06cac5df6fbab4e","dim":40,"obs":{"includeLanding":true,"includeSideFlag":false,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["wide-e0-g0.pkr"],"decisions":497,"chain":"498a92d01a7eba8910b7fbb3dd61c5afe2b9f7c01e914ab2c323c267623c353b"},
+      {"envIndex":1,"games":["wide-e1-g0.pkr"],"decisions":493,"chain":"32bf4f710ebf96e19837fd3c2f03d8138ce17c3b5aee1ebfca38a7bab3023408"}
+    ]},
+    {"name":"side-flag-right","frames":1000,"layoutHash":"d696c0b3b96085b8dec3d08eda416e297263d2072c88c65f570b6f007f7dcd9d","dim":41,"obs":{"includeLanding":true,"includeSideFlag":true,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["side-flag-right-e0-g0.pkr"],"decisions":989,"chain":"753f4ded758301c0a10796ff28e20c5aeeb2039e3dd16679472cc5f54c899917"},
+      {"envIndex":1,"games":["side-flag-right-e1-g0.pkr","side-flag-right-e1-g1.pkr"],"decisions":984,"chain":"b8eb4980e03bbe2ad89153a2f8cb4f38ad6bb0075b0d5901ffdb88a75d684755"}
+    ]},
+    {"name":"side-flag-both","frames":1000,"layoutHash":"d696c0b3b96085b8dec3d08eda416e297263d2072c88c65f570b6f007f7dcd9d","dim":41,"obs":{"includeLanding":true,"includeSideFlag":true,"mirror":true,"winningScore":15},"envs":[
+      {"envIndex":0,"games":["side-flag-both-e0-g0.pkr"],"decisions":982,"chain":"22ea8f4874a84a384341d944d9ab25cd1170088c991506a209031b866626e7ce"},
+      {"envIndex":1,"games":["side-flag-both-e1-g0.pkr"],"decisions":982,"chain":"62018055aed68c6ef27095e678afe8b5156ab8405549ab135d282499a5db3f20"}
+    ]}
+  ]
+}

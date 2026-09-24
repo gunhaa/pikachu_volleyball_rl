@@ -18,4 +18,7 @@ object EnvPaths {
 
     /** 관측·보상 체인 해시 골든 (P4). */
     val goldenEnvChain: Path get() = root.resolve("engine-kotlin/env/golden/env-chain-hashes.txt")
+
+    /** 결정 관측 골든 — 체인 + 리플레이 (Phase 5 P1). JS `ObsEncoder` 가 이것과 대조한다. */
+    val goldenObsDir: Path get() = root.resolve("engine-kotlin/env/golden/obs")
 }

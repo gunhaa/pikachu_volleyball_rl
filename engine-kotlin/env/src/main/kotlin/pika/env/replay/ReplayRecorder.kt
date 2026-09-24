@@ -105,6 +105,18 @@ class ReplayRecorder(
         finish(ended = true)
     }
 
+    /**
+     * 적던 게임을 지금 자른다 — 상한에 닿은 것과 같은 모양(`ended = false`, 마지막 랠리 미완)으로 내보낸다.
+     *
+     * 게임 도중에 기록을 멈춰야 하는 쪽(골든 생성기의 케이스 끝)이 쓴다. 적는 게임이 없으면 아무것도 안 한다.
+     * ⚠️ RALLY 규약에서 랠리가 막 끝난 직후(다음 랠리 시드를 아직 안 적음)에 부르면 시드 수가 모자란다.
+     *    호출하는 쪽이 autoreset 스텝을 한 번 더 돌려 다음 랠리를 연 뒤에 부른다.
+     */
+    fun cut() {
+        if (!recording) return
+        finish(ended = false)
+    }
+
     private fun finish(ended: Boolean) {
         val c = config!!
         if (!ended) pushRally(currentRallyFrames, RallyOutcome.UNFINISHED)
