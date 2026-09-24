@@ -1,0 +1,10 @@
+{
+  "name": "pika-viewer-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "리플레이 뷰어 + 라이브 대전. 업스트림 physics.js 위에 경기 규칙층(GameRunner)을 얹는다. 로컬 전용 — 배포하지 않는다 (NFR-4).",
+  "scripts": {
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/*.test.mjs\""
+  }
+}

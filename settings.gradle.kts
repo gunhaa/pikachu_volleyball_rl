@@ -5,4 +5,5 @@ include(
     ":engine-kotlin:env",
     ":engine-kotlin:server",
     ":engine-kotlin:conformance",
+    ":engine-kotlin:analysis",
 )

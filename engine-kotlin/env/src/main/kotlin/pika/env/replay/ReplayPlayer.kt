@@ -37,10 +37,11 @@ class ReplayPlayer(val replay: Replay) {
     }
 
     /**
-     * @param onFrame 매 물리 프레임 **직후** (`game.step` 다음, 랠리 리셋 전). `frameIndex` 는 0부터.
+     * @param onFrame 매 물리 프레임 **직후** (`game.step` 다음, 랠리 리셋 전). `frameIndex` 는 0부터,
+     *   `scorer` 는 `game.step` 의 반환값 (null 이 아니면 공이 땅에 닿은 프레임).
      *   통계(§6.4)와 체인 해시가 여기서 상태를 읽는다.
      */
-    fun play(onFrame: (game: PikaGame, frameIndex: Int) -> Unit = { _, _ -> }): PlayResult {
+    fun play(onFrame: (game: PikaGame, frameIndex: Int, scorer: Int?) -> Unit = { _, _, _ -> }): PlayResult {
         val r = replay
         var rng = XorShift32(r.seeds[0])
         val game = PikaGame(Rand { rng.nextRand() }, r.slots, r.winningScore, r.firstServeIsPlayer2, r.fixedBoldness)
@@ -55,7 +56,7 @@ class ReplayPlayer(val replay: Replay) {
         while (frame < r.frameCount) {
             for (k in slots.indices) ActionCodec.decode(r.input(k, frame), inputs[slots[k]], edge = null)
             val scorer = game.step(inputs)
-            onFrame(game, frame)
+            onFrame(game, frame, scorer)
             frame++
 
             val outcome = scorer

@@ -31,22 +31,22 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 브라우저가 돌릴 코드가 Kotlin 과 같은 경기를 계산함을 **Node 에서** 증명한다. 리플레이와 라이브가 같은 러너다. (FR-12, FR-14, FR-16~18, M4-b, M4-e, M4-j)
 
-- [ ] `engine-kotlin/analysis` 모듈 골격 (`settings.gradle.kts`, `env` · `core` · `conformance` 의존)
-- [ ] `analysis golden-replays` — 골든 세트 생성 (`plan.md` §7.3) + Kotlin 체인 해시 `chains.json` (1,000 프레임마다 중간값)
-- [ ] 골든 커밋: `engine-kotlin/env/golden/replay/` (합계 ≥ 100,000 프레임)
-- [ ] `viewer-web/` 골격 — `package.json` (Node 테스트만 먼저), `@upstream` 경로
-- [ ] `src/runner/codec.mjs` — 인코더 · 디코더 (라이브 기록에도 쓴다)
-- [ ] `src/runner/runner.mjs` — `GameRunner`: 규칙층을 `PikaGame.kt` 줄 대응 주석과 함께 옮긴다 (§5.1).
+- [x] `engine-kotlin/analysis` 모듈 골격 (`settings.gradle.kts`, `env` · `core` · `conformance` 의존)
+- [x] `analysis golden-replays` — 골든 세트 생성 (`plan.md` §7.3) + Kotlin 체인 해시 `chains.json` (1,000 프레임마다 중간값)
+- [x] 골든 커밋: `engine-kotlin/env/golden/replay/` (합계 ≥ 100,000 프레임)
+- [x] `viewer-web/` 골격 — `package.json` (Node 테스트만 먼저), `@upstream` 경로
+- [x] `src/runner/codec.mjs` — 인코더 · 디코더 (라이브 기록에도 쓴다)
+- [x] `src/runner/runner.mjs` — `GameRunner`: 규칙층을 `PikaGame.kt` 줄 대응 주석과 함께 옮긴다 (§5.1).
       boldness 고정 · 게임 종료 시 `isWinner` / `gameEnded` 세팅 포함 (§2.3)
-- [ ] `InputSource` 인터페이스 + `ReplaySource` · `FsmSource` · `ScriptedSource` (§5.1.1). FSM 은 `decide` 를 부르지 않는다
-- [ ] 시드 공급원 `RecordedSeeds` · `FreshSeeds` (§5.1.2)
-- [ ] `src/runner/recorder.mjs` — 라이브 경기를 v1 형식으로 기록 (Kotlin `ReplayRecorder` 와 같은 바이트)
-- [ ] 매 `step()` 시작에 `setCustomRng(physicsRng)` (§5.2)
-- [ ] `test/conformance.mjs` — 골든 전부 재생, 체인 대조, 첫 불일치 프레임 · 필드 출력
-- [ ] `test/isolation.mjs` — 프레임 사이에 `rand()` 를 부르는 가짜 렌더러를 끼워도 체인 동일 (M4-e)
-- [ ] `test/live.mjs` — `ScriptedSource` 라이브 → 기록 → JS 재생 · Kotlin 재생, 세 체인 일치. FSM 조합 포함 (M4-j, §5.4)
-- [ ] Gradle 테스트에서 Node 호출 (`JsOracleTest` 방식, Node 없으면 **실패**)
-- [ ] **확인**: `npm test` (viewer-web) · `./gradlew build` 초록, 골든 100% 일치, 라이브 동치 통과
+- [x] `InputSource` 인터페이스 + `ReplaySource` · `FsmSource` · `ScriptedSource` (§5.1.1). FSM 은 `decide` 를 부르지 않는다
+- [x] 시드 공급원 `RecordedSeeds` · `FreshSeeds` (§5.1.2)
+- [x] `src/runner/recorder.mjs` — 라이브 경기를 v1 형식으로 기록 (Kotlin `ReplayRecorder` 와 같은 바이트)
+- [x] 매 `step()` 시작에 `setCustomRng(physicsRng)` (§5.2)
+- [x] `test/conformance.mjs` — 골든 전부 재생, 체인 대조, 첫 불일치 프레임 · 필드 출력
+- [x] `test/isolation.mjs` — 프레임 사이에 `rand()` 를 부르는 가짜 렌더러를 끼워도 체인 동일 (M4-e)
+- [x] `test/live.mjs` — `ScriptedSource` 라이브 → 기록 → JS 재생 · Kotlin 재생, 세 체인 일치. FSM 조합 포함 (M4-j, §5.4)
+- [x] Gradle 테스트에서 Node 호출 (`JsOracleTest` 방식, Node 없으면 **실패**)
+- [x] **확인**: `npm test` (viewer-web) · `./gradlew build` 초록, 골든 100% 일치, 라이브 동치 통과
 
 ## P3. 기록 배관 — server 와 Python
 
