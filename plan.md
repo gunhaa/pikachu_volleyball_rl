@@ -101,6 +101,11 @@ Phase 4 기록 "고정 패턴").
 ⚠️ Node 와 브라우저가 기본 진입점(`"."`)을 쓰면 **서로 다른 파일**을 로드한다. NFR-7 을 위해 둘 다
 `onnxruntime-web/wasm` 을 import 하고, Node 에서 그 진입점이 실제로 도는지 P3 첫 항목에서 확인한다.
 
+**P4 확인 결과** (2026-09-24): Node 24 에서 `onnxruntime-web/wasm` (`import` 조건 → `dist/ort.wasm.bundle.min.mjs`) 이
+그대로 돈다. 세션 생성 121 ms. 단 ORT JS API 에는 모델 `metadata_props` 를 읽는 함수가 **없다**
+(`inputMetadata` · `outputMetadata` 뿐). 그래서 `model.mjs` 가 ModelProto 최상위 필드 14 만 직접 읽는다 —
+의존성을 늘리지 않는 60줄짜리 protobuf 리더.
+
 ### 2.6 ONNX export 결정론 — 측정
 
 torch 2.14.0 에서 같은 체크포인트(`track-a-seed0/ckpt-final.pt`)를 두 번씩 내보냈다.
@@ -406,6 +411,10 @@ export class PolicySource {
 }
 ```
 
+- **구현에서 바뀐 점 (P4):** advance() 는 `Promise.all` 이 아니라 슬롯 순서대로 **순차** await 한다. 두 슬롯이
+  한 세션을 공유할 수 있고, 한 세션에 겹친 `run()` 을 wasm 백엔드가 받아 주는지에 결정론을 걸지 않는다.
+  또 `PolicySource` 는 생성 옵션 `edgeTrigger`(기본 true = `EnvConfig` 기본값)를 러너 `settings.edgeTrigger` 와
+  대조한다 — 헤더의 플래그가 정책 입력의 실제 변환과 어긋난 기록을 만들지 않는다.
 - `prepare` 가 없는 입력원만 꽂힌 경기는 기존 동기 `step()` 을 그대로 쓴다 — 리플레이 · seek · Phase 4 테스트 무변경.
 - `decide` 가 `prepare` 없이 불리면 **예외**다. 조용히 지난 프레임의 행동을 쓰는 것보다 낫다.
 - `onRallyStart` 는 러너가 `reset()` 과 `startNextRally()` 에서 부른다 (`runner.mjs` 기존 동작). Kotlin 도 게임 시작과

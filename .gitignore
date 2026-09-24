@@ -56,6 +56,8 @@ checkpoints/
 *.pt
 *.pth
 *.onnx
+# 정책 재현 축소 픽스처 (Phase 5 P4 · P5) — npm test 가 쓰는 seed0 ONNX 한 개
+!viewer-web/test/fixtures/policy/*.onnx
 wandb/
 
 # 차분 테스트 상태 덤프 (plan.md §8.3) — 재생성 가능

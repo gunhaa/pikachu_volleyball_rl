@@ -57,17 +57,18 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > 브라우저와 Node 가 같은 코드로 정책을 돌린다. (FR-8, FR-9, NFR-3, NFR-7)
 
-- [ ] `viewer-web/package.json` — `onnxruntime-web` **1.30.0** 정확 고정
-- [ ] 확인: Node 에서 `onnxruntime-web/wasm` 진입점이 도는가 (§2.5 ⚠️). 안 되면 여기서 멈추고 `plan.md` 를 고친다
-- [ ] `src/policy/model.mjs` — 세션 생성(`numThreads = 1`, wasm), 메타데이터 읽기, `argmax` (첫 최댓값, `>` 비교, §7.3)
-- [ ] `runner.mjs` — `beginFrame()` 분리, `step()` 이 맨 앞에서 호출 (§7.2)
-- [ ] `src/runner/live-loop.mjs` — `advance(runner)` / `playLive(...)` (Node · 브라우저 공용)
-- [ ] `action.mjs` — 누른 상태를 내는 디코더 + `EdgeTrigger` JS 판 (§7.3 ⚠️)
-- [ ] `src/sources/policy.mjs` — `prepare` · `decide`(prepare 없으면 예외) · `onRallyStart` 엣지 리셋
-- [ ] 테스트: Phase 4 테스트 20개 무변경 초록 (`beginFrame` 분리가 동작을 바꾸지 않는다)
-- [ ] 테스트: 정책 경기 렌더링 격리 — 뷰 RNG 를 끼워도 체인 동일 (M4-e 와 같은 형식, NFR-3)
-- [ ] 테스트: 레이아웃 해시 · obs_dim 이 ONNX 메타와 다르면 `PolicySource` 생성 실패
-- [ ] **확인**: `npm test` 초록
+- [x] `viewer-web/package.json` — `onnxruntime-web` **1.30.0** 정확 고정
+- [x] 확인: Node 에서 `onnxruntime-web/wasm` 진입점이 도는가 (§2.5 ⚠️) — **돈다** (Node 24, 세션 생성 121 ms). 단 ORT 에 모델 메타데이터 API 가 없다 → 직접 읽는다 (§2.5)
+- [x] `src/policy/model.mjs` — 세션 생성(`numThreads = 1`, wasm), 메타데이터 읽기(ModelProto 필드 14), `argmax` (첫 최댓값, `>` 비교, §7.3)
+- [x] `runner.mjs` — `beginFrame()` 분리, `step()` 이 맨 앞에서 호출 (§7.2)
+- [x] `src/runner/live-loop.mjs` — `advance(runner)` / `playLive(...)` (Node · 브라우저 공용). prepare 는 슬롯 순서대로 **순차** await (§7.2)
+- [x] `action.mjs` — 누른 상태를 내는 디코더(`decodePolicyAction`) + `EdgeTrigger` JS 판 (§7.3 ⚠️)
+- [x] `src/sources/policy.mjs` — `prepare` · `decide`(prepare 없으면 예외, 한 번만 쓴다) · `onRallyStart` 엣지 리셋
+- [x] 테스트: Phase 4 테스트 20개 무변경 초록 (`beginFrame` 분리가 동작을 바꾸지 않는다)
+- [x] 테스트: 정책 경기 렌더링 격리 — 뷰 RNG 를 끼워도 체인 동일 (M4-e 와 같은 형식, NFR-3). 프레임 사이 + **추론 await 중** 두 곳, 대조군 포함
+- [x] 테스트: 레이아웃 해시 · obs_dim 이 ONNX 메타와 다르면 `PolicySource` 생성 실패
+- [x] 픽스처 `test/fixtures/policy/track-a-seed0.onnx` 를 P5 보다 먼저 커밋 (`.gitignore` 예외 한 줄)
+- [x] **확인**: `npm test` 초록 — 57 / 57 (P4 16개 추가)
 
 ## P5. 평가 경기 재현 (M5-b)
 

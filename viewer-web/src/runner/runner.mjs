@@ -104,13 +104,24 @@ export class GameRunner {
   }
 
   /**
+   * 프레임 앞부분: 물리 RNG 를 걸고, 보류된 랠리 리셋을 한다. 이 뒤의 상태가 **결정 시점**이다
+   * (Kotlin 의 autoreset 스텝이 내보낸 관측과 같은 상태, plan.md §7.2).
+   *
+   * 멱등이다. step() 이 맨 앞에서 다시 부르므로 동기 입력원만 꽂힌 경기는 부를 필요가 없다.
+   * 비동기 입력원(정책)은 `live-loop.mjs` 의 advance() 가 이것 → prepare → step() 순으로 돈다.
+   */
+  beginFrame() {
+    if (this.ended) throw new Error('경기가 이미 끝났습니다');
+    setCustomRng(this.physicsRng); // ⚠️ 매번 — 그 사이에(await 중에도) 렌더러가 자기 RNG 를 걸었을 수 있다
+    if (this.pendingRallyStart) this.startNextRally();
+  }
+
+  /**
    * 한 프레임.
    * @return {{isBallTouchingGround:boolean, scorer:(number|null), outcome:(number|null)}}
    */
   step() {
-    if (this.ended) throw new Error('경기가 이미 끝났습니다');
-    setCustomRng(this.physicsRng); // ⚠️ 매 step 마다 — 그 사이에 렌더러가 자기 RNG 를 걸었을 수 있다
-    if (this.pendingRallyStart) this.startNextRally();
+    this.beginFrame();
 
     const inputs = this.inputs;
     for (let i = 0; i < 2; i++) {
