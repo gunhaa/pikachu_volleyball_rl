@@ -9,6 +9,9 @@ jvm = "21"
 grpc = "1.84.0"
 protobuf = "4.36.2"
 protobufPlugin = "0.9.5"
+# analysis 모듈 전용 (Phase 4). GPLv2 + Universal FOSS Exception — 로컬 분석 도구로만 쓰고 배포하지 않는다.
+# 문제가 되면 MariaDB Connector/J(LGPL) 로 바꾼다 — JDBC 라 드라이버 한 줄이다 (PRD §7).
+mysqlConnector = "9.3.0"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
@@ -23,6 +26,7 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 grpc-protoc-gen-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
 # grpc-stub 이 생성 코드에서 쓰는 javax.annotation.Generated 를 JDK 9+ 에서 채운다.
+mysql-connector = { module = "com.mysql:mysql-connector-j", version.ref = "mysqlConnector" }
 tomcat-annotations = { module = "org.apache.tomcat:annotations-api", version = "6.0.53" }
 
 [plugins]

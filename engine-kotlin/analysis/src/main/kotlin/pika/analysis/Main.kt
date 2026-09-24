@@ -16,6 +16,10 @@ object Main {
           golden-replays [--out <dir>]   골든 리플레이 + Kotlin 체인 해시 (M4-b 기준)
           dump-states <pkr> --from N --count M [--out <file>]
                                          프레임별 State Spec 44필드 (JS 불일치 추적용)
+          ingest <dir> [--kind eval|baseline|selfplay] [--note <text>]
+                                         manifest.jsonl + *.pkr → 재생 검증 → DB (전부 아니면 전무)
+
+        DB 옵션: --db-url <jdbc> --db-user <u> --db-password <p>  (환경 변수 PIKA_DB_URL 등, 기본 compose 값)
     """.trimIndent()
 
     @JvmStatic
@@ -28,6 +32,16 @@ object Main {
         when (args[0]) {
             "golden-replays" -> println(GoldenReplays.write(opts.path("--out") ?: GoldenReplays.dir))
             "dump-states" -> dumpStates(opts)
+            "ingest" -> Db.open(Db.Config.from(opts)).use { conn ->
+                val dir = Paths.get(opts.positional.single())
+                val result = try {
+                    Ingest.ingestDir(conn, dir, opts.str("--kind") ?: "eval", opts.str("--note"))
+                } catch (e: Ingest.IngestException) {
+                    System.err.println("적재 실패 — 아무것도 넣지 않았습니다: ${e.message}")
+                    exitProcess(1)
+                }
+                println("$dir: $result")
+            }
             else -> {
                 System.err.println("알 수 없는 명령: ${args[0]}\n$USAGE")
                 exitProcess(2)

@@ -17,6 +17,8 @@ dependencies {
     implementation(project(":engine-kotlin:env"))
     implementation(project(":engine-kotlin:core"))
     implementation(project(":engine-kotlin:conformance"))
+    // DB 는 여기에만 (NFR-2). runtimeOnly — 코드는 java.sql 만 안다.
+    runtimeOnly(libs.mysql.connector)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

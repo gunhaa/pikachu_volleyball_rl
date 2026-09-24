@@ -32,7 +32,33 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # 분석 DB (Phase 4). **캐시다** — 적재 입력(*.pkr + manifest)에서 언제든 재생성된다
+  # (plan.md §6.3). 스키마를 바꾸면 볼륨을 지우고 다시 적재한다:
+  #   docker compose -f deploy/compose/docker-compose.yml down -v mysql && … up -d mysql
+  #
+  # ⚠️ 인증 정보는 로컬 개발용 고정값이다. 포트를 127.0.0.1 에만 묶는다 (NFR-5).
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_ROOT_PASSWORD: pika-root
+      MYSQL_DATABASE: pika
+      MYSQL_USER: pika
+      MYSQL_PASSWORD: pika
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -ppika-root --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
 volumes:
+  mysql-data:
   # 소켓을 나누기 위한 볼륨이다. **상태를 담지 않는다** — 서버는 디스크에
   # 아무것도 남기지 않고, 재시작 후 같은 Configure 면 같은 결과가 나온다.
   engine-socket:

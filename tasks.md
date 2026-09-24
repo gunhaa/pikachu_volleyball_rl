@@ -67,14 +67,15 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 리플레이를 검증한 뒤에만 DB 에 넣는다. (FR-8, FR-9, NFR-5)
 
-- [ ] `deploy/compose` — `mysql:8.4.11`, 127.0.0.1:3306, 볼륨, healthcheck, `init/` 마운트
-- [ ] `deploy/mysql/init/001_schema.sql` — `plan.md` §6.2
-- [ ] Connector/J 9.3.0 → `libs.versions.toml`, `analysis` 에만
-- [ ] `analysis` 시작 시 `schema_version` 대조
-- [ ] `ingest <dir>` — 재생 검증 · Kotlin 체인 계산 · 트랜잭션, `replay_sha256` 중복은 건너뜀
-- [ ] 테스트: 변조된 리플레이(입력 1바이트 변경)는 적재되지 않고 전체 롤백
-- [ ] 테스트: 같은 디렉터리를 두 번 적재해도 행 수 불변
-- [ ] **확인**: `docker compose up -d mysql` → ingest → 행 수 확인
+- [x] `deploy/compose` — `mysql:8.4.11`, 127.0.0.1:3306, 볼륨, healthcheck, `init/` 마운트
+- [x] `deploy/mysql/init/001_schema.sql` — `plan.md` §6.2
+      (보탬: `match_set.kind` 에 `'live'`, 참가자 유일 키는 `identity` 열 — MySQL UNIQUE 는 NULL 끼리 겹쳐도 통과한다. `000_databases.sql` 로 테스트 DB `pika_test`)
+- [x] Connector/J 9.3.0 → `libs.versions.toml`, `analysis` 에만
+- [x] `analysis` 시작 시 `schema_version` 대조
+- [x] `ingest <dir>` — 재생 검증 · Kotlin 체인 계산 · 트랜잭션, `replay_sha256` 중복은 건너뜀
+- [x] 테스트: 변조된 리플레이(입력 1바이트 변경)는 적재되지 않고 전체 롤백
+- [x] 테스트: 같은 디렉터리를 두 번 적재해도 행 수 불변
+- [x] **확인**: `docker compose up -d mysql` → ingest → 행 수 확인
 
 ## P5. 통계 파생
 
