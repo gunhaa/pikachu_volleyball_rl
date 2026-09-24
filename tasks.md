@@ -93,16 +93,26 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > FSM vs FSM 과 Track A vs FSM 을 적재하고 기존 수치와 대조한다. (FR-10, M4-a, M4-c, M4-d, M4-g)
 
-- [ ] `analysis baseline-fsm --games 800 --base-seed 0` — `GameEvaluator.evaluate` 와 같은 시드 · 서브 배치
-- [ ] **M4-c**: DB 집계 = 왼쪽 799/800, 득점 11,998 : 4,169
-- [ ] Track A 체크포인트 SHA-256 기록 (`runs/track-a-seed{0,1,2}/ckpt-final.pt`)
-- [ ] `evaluate.py --record-replays` × 3시드 (진영별 400)
-- [ ] **M4-d**: DB 집계 = 각 시드 `evaluate.py` 리포트 (승수 · 득점 · 랠리 · 프레임 정확히)
-- [ ] **M4-a**: 3,200게임 전부 재생 검증 통과 (ingest 로그)
-- [ ] **M4-g**: 게임당 평균 크기 — Track A ≤ 4 KB, FSM vs FSM ≤ 256 B
-- [ ] 평가 기록 오버헤드 측정 (기록 켬 / 끔 시간 비)
-- [ ] `scripts/baseline-replays.sh` — 위 과정을 한 번에, 결정론적으로 재생성
-- [ ] **확인**: 스크립트를 빈 DB 에서 다시 돌려 `replay_sha256` 집합 동일
+- [x] `analysis baseline-fsm --games 800 --base-seed 0` — `GameEvaluator.evaluate` 와 같은 시드 · 서브 배치
+- [x] **M4-c**: DB 집계 = 왼쪽 799/800, 득점 11,998 : 4,169
+- [x] Track A 체크포인트 SHA-256 기록 (`runs/track-a-seed{0,1,2}/ckpt-final.pt`)
+- [x] `evaluate.py --record-replays` × 3시드 (진영별 400)
+- [x] **M4-d**: DB 집계 = 각 시드 `evaluate.py` 리포트 (승수 · 득점 · 랠리 · 프레임 정확히)
+- [x] **M4-a**: 3,200게임 전부 재생 검증 통과 (ingest 로그)
+- [x] **M4-g**: 게임당 평균 크기 — Track A ≤ 4 KB, FSM vs FSM ≤ 256 B
+- [x] 평가 기록 오버헤드 측정 (기록 켬 / 끔 시간 비)
+- [x] `scripts/baseline-replays.sh` — 위 과정을 한 번에, 결정론적으로 재생성
+- [x] **확인**: 스크립트를 빈 DB 에서 다시 돌려 `replay_sha256` 집합 동일
+
+**결과 (2026-09-24)**
+| 항목 | 값 |
+|---|---|
+| M4-c | 왼쪽 799/800, 득점 11,998 : 4,169, 랠리 16,167, 프레임 12,235,774 (GameEvaluator 와 전 필드 일치) |
+| M4-d | seed 0/1/2 전부 DB 집계 = evaluate 리포트 (승 · 득실 · 랠리 · 랠리 승 · 프레임 · 잘린 랠리). 프레임은 Phase 3 `eval-final.json` 과도 같다 (744,594 / 721,434 등) |
+| M4-a | 3,200 게임 전부 재생 검증 후 적재 |
+| M4-g | FSM vs FSM 129.0 B · Track A 1,991 / 1,721 / 1,772 B |
+| 기록 오버헤드 | 평가 전체(서버 기동 포함, seed 0) 끔 9.01 / 9.35 / 9.32 s, 켬 9.37 / 9.30 / 8.98 s — 잡음 안 |
+| 재생성 | FRESH=1 두 번, 3,200 게임 집합 digest `59a765e3…4334` 동일. 스크립트 전체 61 s |
 
 ## P7. 뷰어와 라이브 대전
 

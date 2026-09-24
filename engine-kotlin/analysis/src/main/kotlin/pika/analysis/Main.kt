@@ -19,6 +19,11 @@ object Main {
           ingest <dir> [--kind eval|baseline|selfplay] [--note <text>]
                                          manifest.jsonl + *.pkr → 재생 검증 → DB (전부 아니면 전무)
           rebuild-stats [--set <name>]   리플레이 BLOB 에서 rally · power_hit 를 다시 파생
+          baseline-fsm [--games 800] [--base-seed 0] [--out <dir>] [--no-ingest]
+                                         FSM vs FSM 을 GameEvaluator 규약으로 기록 → 적재 (M4-c)
+          report --set <name> [--expect <json>]
+                                         DB 집계 (SideStats 모양). --expect 와 다르면 exit 1 (M4-c · M4-d)
+          replay-hashes                  DB 의 replay_sha256 집합 digest (재생성 결정론 확인)
 
         DB 옵션: --db-url <jdbc> --db-user <u> --db-password <p>  (환경 변수 PIKA_DB_URL 등, 기본 compose 값)
     """.trimIndent()
@@ -42,6 +47,37 @@ object Main {
                     exitProcess(1)
                 }
                 println("$dir: $result")
+            }
+            "baseline-fsm" -> {
+                val dir = opts.path("--out") ?: Paths.get("runs/baselines/fsm-vs-fsm")
+                val expected = Baselines.writeFsm(dir, opts.int("--games", 800), opts.int("--base-seed", 0))
+                println("FSM vs FSM 기록 → $dir\n  GameEvaluator: ${Json.write(expected)}")
+                if ("--no-ingest" !in opts.flags) {
+                    Db.open(Db.Config.from(opts)).use { conn ->
+                        println("  ${Ingest.ingestDir(conn, dir, kind = "baseline")}")
+                    }
+                }
+            }
+            "report" -> Db.open(Db.Config.from(opts)).use { conn ->
+                val set = opts.str("--set") ?: error("--set 이 필요합니다")
+                val db = Baselines.report(conn, set)
+                println(Json.write(db))
+                opts.path("--expect")?.let { path ->
+                    val diff = Baselines.compare(db, Json.parse(java.nio.file.Files.readString(path)).obj())
+                    if (diff.isNotEmpty()) {
+                        System.err.println("DB 집계 ≠ 리포트 ($path):\n  " + diff.joinToString("\n  "))
+                        exitProcess(1)
+                    }
+                    println("일치: $path")
+                }
+            }
+            "replay-hashes" -> Db.open(Db.Config.from(opts)).use { conn ->
+                val hashes = conn.createStatement().use { st ->
+                    st.executeQuery("SELECT replay_sha256 FROM game ORDER BY replay_sha256").use { rs ->
+                        buildList { while (rs.next()) add(rs.getString(1)) }
+                    }
+                }
+                println("${hashes.size} 게임, 집합 digest ${Ingest.sha256Hex(hashes.joinToString("\n").toByteArray())}")
             }
             "rebuild-stats" -> Db.open(Db.Config.from(opts)).use { conn ->
                 println("통계 재계산: ${Ingest.rebuildStats(conn, opts.str("--set"))} 게임")
