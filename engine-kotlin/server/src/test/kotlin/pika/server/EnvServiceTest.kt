@@ -19,7 +19,10 @@ import pika.env.ObsSpec
 import pika.env.RewardTerms
 import pika.env.Slots
 import pika.env.VectorEnv
+import pika.env.replay.ReplayCodec
+import pika.env.replay.ReplayPlayer
 import pika.env.v1.ConfigureRequest
+import pika.env.v1.FetchReplaysRequest
 import pika.env.v1.HealthRequest
 import pika.env.v1.PikaEnvGrpc
 import pika.env.v1.ResetRequest
@@ -68,10 +71,13 @@ class EnvServiceTest {
         p2: SlotKind = SlotKind.SLOT_KIND_FSM,
         swappedEnvs: Int = 0,
         fixedBoldness: Int = -1,
+        recordReplays: Boolean? = null,
     ) = stub.configure(
         ConfigureRequest.newBuilder()
             .setNumEnvs(numEnvs).setBaseSeed(baseSeed).setP1(p1).setP2(p2)
-            .setSwappedEnvs(swappedEnvs).setFixedBoldness(fixedBoldness).build(),
+            .setSwappedEnvs(swappedEnvs).setFixedBoldness(fixedBoldness)
+            .apply { if (recordReplays != null) setRecordReplays(recordReplays) }
+            .build(),
     )
 
     private fun ByteString.asFloats(): FloatArray {
@@ -353,5 +359,63 @@ class EnvServiceTest {
         for (i in 0 until reply.obsDim) {
             assertEquals(expected.observations[i], buf.getFloat(i * 4), 0f, "관측 $i")
         }
+    }
+
+    // ── Phase 4: 리플레이 기록 (FR-6) ─────────────────────────────────────
+
+    @Test
+    @DisplayName("record_replays: FetchReplays 가 in-process VectorEnv 의 기록과 바이트까지 같고, 큐를 비운다")
+    fun fetchReplaysMatchesInProcess() {
+        val numEnvs = 4
+        val config = EnvConfig(slots = Slots.EXTERNAL_VS_FSM, baseSeed = 21)
+        val expected = VectorEnv(config, numEnvs, swappedEnvs = 2, recordReplays = true)
+        expected.reset()
+        val session = configure(numEnvs = numEnvs, baseSeed = 21, swappedEnvs = 2, recordReplays = true).sessionId
+
+        val actions = EnvGolden.ActionSequence(3, numEnvs, 1)
+        var fetched = 0
+        repeat(6_000) {
+            val batch = actions.next().copyOf()
+            expected.step(batch)
+            val reply = stub.step(StepRequest.newBuilder().setActions(ByteString.copyFrom(batch)).setSessionId(session).build())
+            assertFloatsEqual(expected.observations, reply.observations.asFloats(), "기록을 켜도 관측은 같다")
+            if (it % 500 == 499) {
+                val want = expected.drainReplays()
+                val got = stub.fetchReplays(FetchReplaysRequest.newBuilder().setSessionId(session).build()).gamesList
+                assertEquals(want.map { g -> g.envIndex to g.gameInEnv }, got.map { g -> g.envIndex to g.gameInEnv })
+                for ((w, g) in want.zip(got)) {
+                    assertArrayEquals(ReplayCodec.encode(w.replay), g.replay.toByteArray())
+                    assertTrue(ReplayPlayer(ReplayCodec.decode(g.replay.toByteArray())).play().ok)
+                }
+                fetched += got.size
+            }
+        }
+        assertTrue(fetched > 0, "비교 구간에 끝난 게임이 있어야 한다")
+        val again = stub.fetchReplays(FetchReplaysRequest.newBuilder().setSessionId(session).build())
+        assertEquals(0, again.gamesCount, "Fetch 는 큐를 비운다")
+    }
+
+    @Test
+    @DisplayName("record_replays 를 비우면 기록하지 않는다 — FetchReplays 는 항상 비어 있다")
+    fun recordingIsOffByDefault() {
+        val session = configure(numEnvs = 2).sessionId
+        val actions = ByteString.copyFrom(ByteArray(2))
+        repeat(5_000) { stub.step(StepRequest.newBuilder().setActions(actions).setSessionId(session).build()) }
+        assertEquals(0, stub.fetchReplays(FetchReplaysRequest.newBuilder().setSessionId(session).build()).gamesCount)
+    }
+
+    @Test
+    @DisplayName("FetchReplays: Configure 전 · 옛 세션이면 FAILED_PRECONDITION")
+    fun fetchReplaysChecksSession() {
+        val before = assertThrows(StatusRuntimeException::class.java) {
+            stub.fetchReplays(FetchReplaysRequest.getDefaultInstance())
+        }
+        assertEquals(Status.Code.FAILED_PRECONDITION, before.status.code)
+        val first = configure(recordReplays = true).sessionId
+        configure(recordReplays = true)
+        val stale = assertThrows(StatusRuntimeException::class.java) {
+            stub.fetchReplays(FetchReplaysRequest.newBuilder().setSessionId(first).build())
+        }
+        assertEquals(Status.Code.FAILED_PRECONDITION, stale.status.code)
     }
 }

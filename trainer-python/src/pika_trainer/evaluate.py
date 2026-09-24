@@ -51,6 +51,7 @@ import torch
 
 from .env_client import ACTION_COUNT, EnvOptions, PikaVectorEnv
 from .net import ActorCritic, configure_torch
+from .replay import ReplaySink, sha256_file
 from .server_process import launch_server
 
 #: 게임당 프레임 상한 (plan.md §9.4). FSM vs FSM 의 게임당 평균 15,275 의 약 4배다.
@@ -287,14 +288,31 @@ def evaluate_policy(
     mode: str = "argmax",
     max_game_frames: int = MAX_GAME_FRAMES,
     max_steps: int | None = None,
+    recorder: ReplaySink | None = None,
+    fetch_every: int = 256,
 ) -> EvalReport:
     """양 진영에서 `games_per_side` 게임씩 돌린다.
 
     ⚠️ `env` 는 **양 진영을 모두** 담고 있어야 한다 (`EnvOptions.for_policy` 의 `swapped_envs`).
        한 진영에서만 재면 승률이 실력이 아니라 진영을 재게 된다 (PRD §2.4).
+
+    Args:
+        recorder: 주면 **센 게임만** 리플레이로 남긴다 (Phase 4 FR-6). `env` 는
+            ``record_replays=True`` 이고 ``replay_frame_cap == max_game_frames`` 여야 한다 —
+            그래야 미결로 센 게임과 상한에서 잘린 리플레이가 같은 게임이다.
+            기록은 리포트를 바꾸지 않는다 (같은 스텝 · 같은 행동).
     """
+    if recorder is not None:
+        if not env.options.record_replays:
+            raise ValueError("recorder 를 주려면 EnvOptions.record_replays=True 로 구성하세요")
+        if env.options.replay_frame_cap != max_game_frames:
+            raise ValueError(
+                f"replay_frame_cap({env.options.replay_frame_cap}) ≠ max_game_frames({max_game_frames}) — "
+                "미결 게임과 잘린 리플레이의 짝이 어긋납니다",
+            )
     sides = np.asarray(env.slot_sides)
     rows = env.num_envs
+    slot_count = env.slot_count
     winning = env.options.winning_score
     quota = _quotas(sides, games_per_side)
 
@@ -302,6 +320,8 @@ def evaluate_policy(
     consumed = np.zeros(rows, dtype=np.int64)   # 이 행이 지금까지 센 게임 (승패 + 미결)
     dead = np.zeros(rows, dtype=bool)           # 상한을 넘겨 버린 게임을 진행 중인가
     pending = np.zeros(rows, dtype=bool)        # 다음 스텝이 버려지는 autoreset 스텝인가
+    # 행이 지금 치르는 게임의 번호 = 서버 `RecordedGame.game_in_env` (리셋 이후 끝난 게임 수).
+    game_idx = np.zeros(rows, dtype=np.int64)
 
     # 행별 "현재 게임" 누적. 게임이 끝날 때 통째로 진영 집계에 옮긴다 —
     # 진행 중인 게임의 프레임이 "게임당 프레임" 에 섞이면 GameEvaluator 와 정의가 갈라진다.
@@ -350,6 +370,8 @@ def evaluate_policy(
             acc[int(sides[row])]["unresolved"] += 1
             consumed[row] += 1
             dead[row] = True
+            if recorder is not None:
+                recorder.mark(int(row) // slot_count, int(game_idx[row]), unresolved=True)
 
         # (2) 게임 종료 → 집계하고 행을 비운다.
         for row in np.flatnonzero(game_over):
@@ -364,10 +386,20 @@ def evaluate_policy(
                 side["frames"] += int(g_frames[row])
                 side["truncated_rallies"] += int(g_truncated[row])
                 consumed[row] += 1
+                if recorder is not None:
+                    recorder.mark(int(row) // slot_count, int(game_idx[row]), unresolved=False)
             dead[row] = False
             g_frames[row] = g_rallies[row] = g_rally_wins[row] = g_truncated[row] = 0
+            game_idx[row] += 1
 
         pending = done
+        # ⚠️ 꺼내는 것은 이 스텝을 처리(mark)한 **뒤** 다 — 꺼낸 게임의 판정이 이미 끝나 있다.
+        if recorder is not None and steps % fetch_every == 0:
+            recorder.offer(env.fetch_replays())
+
+    if recorder is not None:
+        recorder.offer(env.fetch_replays())
+        recorder.close()
 
     return EvalReport(
         as_left=SideStats(**acc[0]),
@@ -392,8 +424,14 @@ def evaluate_target(
     mode: str = "argmax",
     max_game_frames: int = MAX_GAME_FRAMES,
     max_rally_frames: int = 3_000,
+    record_dir: str | Path | None = None,
+    set_name: str | None = None,
+    participant: dict[str, Any] | None = None,
 ) -> EvalReport:
     """서버 하나에 붙어 한 조건을 평가한다. 환경은 **이 함수가 만들고 닫는다.**
+
+    ``record_dir`` 를 주면 센 게임의 리플레이 + ``manifest.jsonl`` 을 거기 쓴다 (Phase 4 FR-6).
+    ``participant`` 는 정책 쪽 참가자 (``{"kind": "external", "checkpoint": "sha256:…", "label": …}``).
 
     `policy_factory` 가 환경을 받는 이유: 관측 차원이 서버 구성에서 나오므로 (FR-14 의
     41차원) 정책을 그보다 먼저 만들 수 없는 경우가 있다.
@@ -405,12 +443,21 @@ def evaluate_target(
         p2="fsm",
         fixed_boldness=fixed_boldness,
         max_rally_frames=max_rally_frames,
+        record_replays=record_dir is not None,
+        replay_frame_cap=max_game_frames,
     )
+    recorder = None
+    if record_dir is not None:
+        recorder = ReplaySink(
+            record_dir, set_name or Path(record_dir).name,
+            participant or {"kind": "external", "checkpoint": None, "label": set_name},
+        )
     env = PikaVectorEnv(target, options)
     try:
         return evaluate_policy(
             env, policy_factory(env),
             games_per_side=games_per_side, mode=mode, max_game_frames=max_game_frames,
+            recorder=recorder,
         )
     finally:
         env.close()
@@ -477,6 +524,9 @@ def main() -> None:
     p.add_argument("--boldness-games", type=int, default=50, help="b 당 **진영별** 게임 수")
     p.add_argument("--target", help="이미 떠 있는 서버. 없으면 직접 띄운다 (plan.md §9.3)")
     p.add_argument("--json", help="리포트를 JSON 으로 저장할 경로")
+    p.add_argument("--record-replays", metavar="DIR",
+                   help="센 게임의 리플레이 + manifest.jsonl 을 여기에 쓴다 (Phase 4, `analysis ingest` 입력)")
+    p.add_argument("--set-name", help="리플레이 묶음 이름 (기본: 디렉터리 이름)")
     args = p.parse_args()
 
     configure_torch(args.threads)
@@ -485,10 +535,23 @@ def main() -> None:
     # 학습된 정책의 결과와 구분되지 않는다.
     mode = "random" if args.random else args.mode
 
+    participant: dict[str, Any] | None = None
+    if args.record_replays:
+        # 체크포인트 SHA-256 — "같은 가중치로 만든 리플레이인가" 를 확인하는 장치 (M6-d).
+        if args.random:
+            participant = {"kind": "external", "checkpoint": None, "label": "random"}
+        else:
+            participant = {
+                "kind": "external",
+                "checkpoint": f"sha256:{sha256_file(args.checkpoint)}",
+                "label": args.set_name or Path(args.checkpoint).parent.name,
+            }
+
     def run(target: str) -> dict[str, Any]:
         report = evaluate_target(
             target, factory, games_per_side=args.games, num_envs=args.num_envs,
             base_seed=args.seed, mode=mode, max_game_frames=args.max_game_frames,
+            record_dir=args.record_replays, set_name=args.set_name, participant=participant,
         )
         print("── 평가 ──")
         print(report)

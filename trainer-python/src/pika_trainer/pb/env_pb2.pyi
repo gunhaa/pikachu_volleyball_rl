@@ -31,7 +31,7 @@ class RewardWeights(_message.Message):
     def __init__(self, rally_win: _Optional[float] = ..., ball_touch: _Optional[float] = ..., crossed_net: _Optional[float] = ..., opponent_miss: _Optional[float] = ..., time_penalty: _Optional[float] = ...) -> None: ...
 
 class ConfigureRequest(_message.Message):
-    __slots__ = ("num_envs", "base_seed", "p1", "p2", "winning_score", "max_rally_frames", "obs_include_expected_landing", "obs_include_side_flag", "mirror_observations", "edge_trigger_power_hit", "reward_weights", "swapped_envs", "fixed_boldness")
+    __slots__ = ("num_envs", "base_seed", "p1", "p2", "winning_score", "max_rally_frames", "obs_include_expected_landing", "obs_include_side_flag", "mirror_observations", "edge_trigger_power_hit", "reward_weights", "swapped_envs", "fixed_boldness", "record_replays", "replay_frame_cap")
     NUM_ENVS_FIELD_NUMBER: _ClassVar[int]
     BASE_SEED_FIELD_NUMBER: _ClassVar[int]
     P1_FIELD_NUMBER: _ClassVar[int]
@@ -45,6 +45,8 @@ class ConfigureRequest(_message.Message):
     REWARD_WEIGHTS_FIELD_NUMBER: _ClassVar[int]
     SWAPPED_ENVS_FIELD_NUMBER: _ClassVar[int]
     FIXED_BOLDNESS_FIELD_NUMBER: _ClassVar[int]
+    RECORD_REPLAYS_FIELD_NUMBER: _ClassVar[int]
+    REPLAY_FRAME_CAP_FIELD_NUMBER: _ClassVar[int]
     num_envs: int
     base_seed: int
     p1: SlotKind
@@ -58,7 +60,9 @@ class ConfigureRequest(_message.Message):
     reward_weights: RewardWeights
     swapped_envs: int
     fixed_boldness: int
-    def __init__(self, num_envs: _Optional[int] = ..., base_seed: _Optional[int] = ..., p1: _Optional[_Union[SlotKind, str]] = ..., p2: _Optional[_Union[SlotKind, str]] = ..., winning_score: _Optional[int] = ..., max_rally_frames: _Optional[int] = ..., obs_include_expected_landing: _Optional[bool] = ..., obs_include_side_flag: _Optional[bool] = ..., mirror_observations: _Optional[bool] = ..., edge_trigger_power_hit: _Optional[bool] = ..., reward_weights: _Optional[_Union[RewardWeights, _Mapping]] = ..., swapped_envs: _Optional[int] = ..., fixed_boldness: _Optional[int] = ...) -> None: ...
+    record_replays: bool
+    replay_frame_cap: int
+    def __init__(self, num_envs: _Optional[int] = ..., base_seed: _Optional[int] = ..., p1: _Optional[_Union[SlotKind, str]] = ..., p2: _Optional[_Union[SlotKind, str]] = ..., winning_score: _Optional[int] = ..., max_rally_frames: _Optional[int] = ..., obs_include_expected_landing: _Optional[bool] = ..., obs_include_side_flag: _Optional[bool] = ..., mirror_observations: _Optional[bool] = ..., edge_trigger_power_hit: _Optional[bool] = ..., reward_weights: _Optional[_Union[RewardWeights, _Mapping]] = ..., swapped_envs: _Optional[int] = ..., fixed_boldness: _Optional[int] = ..., record_replays: _Optional[bool] = ..., replay_frame_cap: _Optional[int] = ...) -> None: ...
 
 class ConfigureReply(_message.Message):
     __slots__ = ("num_envs", "slot_count", "obs_dim", "obs_layout_hash", "obs_field_names", "reward_term_names", "action_count", "session_id")
@@ -141,3 +145,25 @@ class HealthReply(_message.Message):
     reward_term_names: _containers.RepeatedScalarFieldContainer[str]
     session_id: int
     def __init__(self, version: _Optional[str] = ..., configured: _Optional[bool] = ..., num_envs: _Optional[int] = ..., slot_count: _Optional[int] = ..., obs_dim: _Optional[int] = ..., obs_layout_hash: _Optional[str] = ..., total_env_steps: _Optional[int] = ..., uptime_seconds: _Optional[float] = ..., env_steps_per_sec: _Optional[float] = ..., reward_term_names: _Optional[_Iterable[str]] = ..., session_id: _Optional[int] = ...) -> None: ...
+
+class FetchReplaysRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: int
+    def __init__(self, session_id: _Optional[int] = ...) -> None: ...
+
+class FetchReplaysReply(_message.Message):
+    __slots__ = ("games",)
+    GAMES_FIELD_NUMBER: _ClassVar[int]
+    games: _containers.RepeatedCompositeFieldContainer[RecordedGame]
+    def __init__(self, games: _Optional[_Iterable[_Union[RecordedGame, _Mapping]]] = ...) -> None: ...
+
+class RecordedGame(_message.Message):
+    __slots__ = ("env_index", "game_in_env", "replay")
+    ENV_INDEX_FIELD_NUMBER: _ClassVar[int]
+    GAME_IN_ENV_FIELD_NUMBER: _ClassVar[int]
+    REPLAY_FIELD_NUMBER: _ClassVar[int]
+    env_index: int
+    game_in_env: int
+    replay: bytes
+    def __init__(self, env_index: _Optional[int] = ..., game_in_env: _Optional[int] = ..., replay: _Optional[bytes] = ...) -> None: ...

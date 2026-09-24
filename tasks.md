@@ -52,15 +52,16 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 평가가 치른 경기를 파일로 남긴다. (FR-6, FR-7)
 
-- [ ] `proto/env.proto` — `record_replays = 14`, `FetchReplays`, `RecordedGame` (§7.1)
-- [ ] `EnvService` — 설정 반영, `FetchReplays` 는 큐를 비운다, 세션 검사
-- [ ] `gen-python-proto.sh` 재생성
-- [ ] `env_client.py` — `EnvOptions.record_replays`, `fetch_replays()`
-- [ ] `evaluate.py` — `ReplaySink`: 센 게임만 `counted = true`, 미결은 `unresolved = true`, `manifest.jsonl` (§3.2, §7.2)
-- [ ] `--record-replays <dir>` · `--set-name` CLI, 체크포인트 SHA-256 을 manifest 에
-- [ ] 테스트: 행 번호 ↔ `envIndex` 짝, 할당량 초과 게임 제외, 파일 수 = 센 게임 수
-- [ ] 테스트: 기록을 켠 평가의 리포트 = 끈 평가의 리포트 (`to_dict()` `==`)
-- [ ] **확인**: pytest 초록, `EnvServiceTest` 초록
+- [x] `proto/env.proto` — `record_replays = 14`, `FetchReplays`, `RecordedGame` (§7.1)
+      + `replay_frame_cap = 15` (계획에 없던 추가: Python `max_game_frames` 를 그대로 내려보내 미결 게임과 잘린 리플레이의 짝을 보장)
+- [x] `EnvService` — 설정 반영, `FetchReplays` 는 큐를 비운다, 세션 검사
+- [x] `gen-python-proto.sh` 재생성
+- [x] `env_client.py` — `EnvOptions.record_replays`, `fetch_replays()`
+- [x] `evaluate.py` — `ReplaySink`: 센 게임만 `counted = true`, 미결은 `unresolved = true`, `manifest.jsonl` (§3.2, §7.2)
+- [x] `--record-replays <dir>` · `--set-name` CLI, 체크포인트 SHA-256 을 manifest 에
+- [x] 테스트: 행 번호 ↔ `envIndex` 짝, 할당량 초과 게임 제외, 파일 수 = 센 게임 수
+- [x] 테스트: 기록을 켠 평가의 리포트 = 끈 평가의 리포트 (`to_dict()` `==`)
+- [x] **확인**: pytest 초록, `EnvServiceTest` 초록
 
 ## P4. MySQL 과 적재
 

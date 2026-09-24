@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tenv.proto\x12\x0bpika.env.v1\"x\n\rRewardWeights\x12\x11\n\trally_win\x18\x01 \x01(\x02\x12\x12\n\nball_touch\x18\x02 \x01(\x02\x12\x13\n\x0b\x63rossed_net\x18\x03 \x01(\x02\x12\x15\n\ropponent_miss\x18\x04 \x01(\x02\x12\x14\n\x0ctime_penalty\x18\x05 \x01(\x02\"\xf3\x04\n\x10\x43onfigureRequest\x12\x10\n\x08num_envs\x18\x01 \x01(\x05\x12\x11\n\tbase_seed\x18\x02 \x01(\x05\x12!\n\x02p1\x18\x03 \x01(\x0e\x32\x15.pika.env.v1.SlotKind\x12!\n\x02p2\x18\x04 \x01(\x0e\x32\x15.pika.env.v1.SlotKind\x12\x1a\n\rwinning_score\x18\x05 \x01(\x05H\x00\x88\x01\x01\x12\x1d\n\x10max_rally_frames\x18\x06 \x01(\x05H\x01\x88\x01\x01\x12)\n\x1cobs_include_expected_landing\x18\x07 \x01(\x08H\x02\x88\x01\x01\x12\"\n\x15obs_include_side_flag\x18\x08 \x01(\x08H\x03\x88\x01\x01\x12 \n\x13mirror_observations\x18\t \x01(\x08H\x04\x88\x01\x01\x12#\n\x16\x65\x64ge_trigger_power_hit\x18\n \x01(\x08H\x05\x88\x01\x01\x12\x32\n\x0ereward_weights\x18\x0b \x01(\x0b\x32\x1a.pika.env.v1.RewardWeights\x12\x19\n\x0cswapped_envs\x18\x0c \x01(\x05H\x06\x88\x01\x01\x12\x1b\n\x0e\x66ixed_boldness\x18\r \x01(\x05H\x07\x88\x01\x01\x42\x10\n\x0e_winning_scoreB\x13\n\x11_max_rally_framesB\x1f\n\x1d_obs_include_expected_landingB\x18\n\x16_obs_include_side_flagB\x16\n\x14_mirror_observationsB\x19\n\x17_edge_trigger_power_hitB\x0f\n\r_swapped_envsB\x11\n\x0f_fixed_boldness\"\xbe\x01\n\x0e\x43onfigureReply\x12\x10\n\x08num_envs\x18\x01 \x01(\x05\x12\x12\n\nslot_count\x18\x02 \x01(\x05\x12\x0f\n\x07obs_dim\x18\x03 \x01(\x05\x12\x17\n\x0fobs_layout_hash\x18\x04 \x01(\t\x12\x17\n\x0fobs_field_names\x18\x05 \x03(\t\x12\x19\n\x11reward_term_names\x18\x06 \x03(\t\x12\x14\n\x0c\x61\x63tion_count\x18\x07 \x01(\x05\x12\x12\n\nsession_id\x18\x08 \x01(\x03\"H\n\x0cResetRequest\x12\x16\n\tbase_seed\x18\x01 \x01(\x05H\x00\x88\x01\x01\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x42\x0c\n\n_base_seed\"2\n\x0bStepRequest\x12\x0f\n\x07\x61\x63tions\x18\x01 \x01(\x0c\x12\x12\n\nsession_id\x18\x02 \x01(\x03\"\x7f\n\tStepReply\x12\x14\n\x0cobservations\x18\x01 \x01(\x0c\x12\x0f\n\x07rewards\x18\x02 \x01(\x0c\x12\x12\n\nterminated\x18\x03 \x01(\x0c\x12\x11\n\ttruncated\x18\x04 \x01(\x0c\x12\x14\n\x0creward_terms\x18\x05 \x01(\x0c\x12\x0e\n\x06scores\x18\x06 \x01(\x0c\"\x0f\n\rHealthRequest\"\xfd\x01\n\x0bHealthReply\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x12\n\nconfigured\x18\x02 \x01(\x08\x12\x10\n\x08num_envs\x18\x03 \x01(\x05\x12\x12\n\nslot_count\x18\x04 \x01(\x05\x12\x0f\n\x07obs_dim\x18\x05 \x01(\x05\x12\x17\n\x0fobs_layout_hash\x18\x06 \x01(\t\x12\x17\n\x0ftotal_env_steps\x18\x07 \x01(\x03\x12\x16\n\x0euptime_seconds\x18\x08 \x01(\x01\x12\x19\n\x11\x65nv_steps_per_sec\x18\t \x01(\x01\x12\x19\n\x11reward_term_names\x18\n \x03(\t\x12\x12\n\nsession_id\x18\x0b \x01(\x03*P\n\x08SlotKind\x12\x19\n\x15SLOT_KIND_UNSPECIFIED\x10\x00\x12\x16\n\x12SLOT_KIND_EXTERNAL\x10\x01\x12\x11\n\rSLOT_KIND_FSM\x10\x02\x32\x88\x02\n\x07PikaEnv\x12G\n\tConfigure\x12\x1d.pika.env.v1.ConfigureRequest\x1a\x1b.pika.env.v1.ConfigureReply\x12:\n\x05Reset\x12\x19.pika.env.v1.ResetRequest\x1a\x16.pika.env.v1.StepReply\x12\x38\n\x04Step\x12\x18.pika.env.v1.StepRequest\x1a\x16.pika.env.v1.StepReply\x12>\n\x06Health\x12\x1a.pika.env.v1.HealthRequest\x1a\x18.pika.env.v1.HealthReplyB\x19\n\x0bpika.env.v1B\x08\x45nvProtoP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tenv.proto\x12\x0bpika.env.v1\"x\n\rRewardWeights\x12\x11\n\trally_win\x18\x01 \x01(\x02\x12\x12\n\nball_touch\x18\x02 \x01(\x02\x12\x13\n\x0b\x63rossed_net\x18\x03 \x01(\x02\x12\x15\n\ropponent_miss\x18\x04 \x01(\x02\x12\x14\n\x0ctime_penalty\x18\x05 \x01(\x02\"\xd7\x05\n\x10\x43onfigureRequest\x12\x10\n\x08num_envs\x18\x01 \x01(\x05\x12\x11\n\tbase_seed\x18\x02 \x01(\x05\x12!\n\x02p1\x18\x03 \x01(\x0e\x32\x15.pika.env.v1.SlotKind\x12!\n\x02p2\x18\x04 \x01(\x0e\x32\x15.pika.env.v1.SlotKind\x12\x1a\n\rwinning_score\x18\x05 \x01(\x05H\x00\x88\x01\x01\x12\x1d\n\x10max_rally_frames\x18\x06 \x01(\x05H\x01\x88\x01\x01\x12)\n\x1cobs_include_expected_landing\x18\x07 \x01(\x08H\x02\x88\x01\x01\x12\"\n\x15obs_include_side_flag\x18\x08 \x01(\x08H\x03\x88\x01\x01\x12 \n\x13mirror_observations\x18\t \x01(\x08H\x04\x88\x01\x01\x12#\n\x16\x65\x64ge_trigger_power_hit\x18\n \x01(\x08H\x05\x88\x01\x01\x12\x32\n\x0ereward_weights\x18\x0b \x01(\x0b\x32\x1a.pika.env.v1.RewardWeights\x12\x19\n\x0cswapped_envs\x18\x0c \x01(\x05H\x06\x88\x01\x01\x12\x1b\n\x0e\x66ixed_boldness\x18\r \x01(\x05H\x07\x88\x01\x01\x12\x1b\n\x0erecord_replays\x18\x0e \x01(\x08H\x08\x88\x01\x01\x12\x1d\n\x10replay_frame_cap\x18\x0f \x01(\x05H\t\x88\x01\x01\x42\x10\n\x0e_winning_scoreB\x13\n\x11_max_rally_framesB\x1f\n\x1d_obs_include_expected_landingB\x18\n\x16_obs_include_side_flagB\x16\n\x14_mirror_observationsB\x19\n\x17_edge_trigger_power_hitB\x0f\n\r_swapped_envsB\x11\n\x0f_fixed_boldnessB\x11\n\x0f_record_replaysB\x13\n\x11_replay_frame_cap\"\xbe\x01\n\x0e\x43onfigureReply\x12\x10\n\x08num_envs\x18\x01 \x01(\x05\x12\x12\n\nslot_count\x18\x02 \x01(\x05\x12\x0f\n\x07obs_dim\x18\x03 \x01(\x05\x12\x17\n\x0fobs_layout_hash\x18\x04 \x01(\t\x12\x17\n\x0fobs_field_names\x18\x05 \x03(\t\x12\x19\n\x11reward_term_names\x18\x06 \x03(\t\x12\x14\n\x0c\x61\x63tion_count\x18\x07 \x01(\x05\x12\x12\n\nsession_id\x18\x08 \x01(\x03\"H\n\x0cResetRequest\x12\x16\n\tbase_seed\x18\x01 \x01(\x05H\x00\x88\x01\x01\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x42\x0c\n\n_base_seed\"2\n\x0bStepRequest\x12\x0f\n\x07\x61\x63tions\x18\x01 \x01(\x0c\x12\x12\n\nsession_id\x18\x02 \x01(\x03\"\x7f\n\tStepReply\x12\x14\n\x0cobservations\x18\x01 \x01(\x0c\x12\x0f\n\x07rewards\x18\x02 \x01(\x0c\x12\x12\n\nterminated\x18\x03 \x01(\x0c\x12\x11\n\ttruncated\x18\x04 \x01(\x0c\x12\x14\n\x0creward_terms\x18\x05 \x01(\x0c\x12\x0e\n\x06scores\x18\x06 \x01(\x0c\"\x0f\n\rHealthRequest\"\xfd\x01\n\x0bHealthReply\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x12\n\nconfigured\x18\x02 \x01(\x08\x12\x10\n\x08num_envs\x18\x03 \x01(\x05\x12\x12\n\nslot_count\x18\x04 \x01(\x05\x12\x0f\n\x07obs_dim\x18\x05 \x01(\x05\x12\x17\n\x0fobs_layout_hash\x18\x06 \x01(\t\x12\x17\n\x0ftotal_env_steps\x18\x07 \x01(\x03\x12\x16\n\x0euptime_seconds\x18\x08 \x01(\x01\x12\x19\n\x11\x65nv_steps_per_sec\x18\t \x01(\x01\x12\x19\n\x11reward_term_names\x18\n \x03(\t\x12\x12\n\nsession_id\x18\x0b \x01(\x03\")\n\x13\x46\x65tchReplaysRequest\x12\x12\n\nsession_id\x18\x01 \x01(\x03\"=\n\x11\x46\x65tchReplaysReply\x12(\n\x05games\x18\x01 \x03(\x0b\x32\x19.pika.env.v1.RecordedGame\"F\n\x0cRecordedGame\x12\x11\n\tenv_index\x18\x01 \x01(\x05\x12\x13\n\x0bgame_in_env\x18\x02 \x01(\x05\x12\x0e\n\x06replay\x18\x03 \x01(\x0c*P\n\x08SlotKind\x12\x19\n\x15SLOT_KIND_UNSPECIFIED\x10\x00\x12\x16\n\x12SLOT_KIND_EXTERNAL\x10\x01\x12\x11\n\rSLOT_KIND_FSM\x10\x02\x32\xda\x02\n\x07PikaEnv\x12G\n\tConfigure\x12\x1d.pika.env.v1.ConfigureRequest\x1a\x1b.pika.env.v1.ConfigureReply\x12:\n\x05Reset\x12\x19.pika.env.v1.ResetRequest\x1a\x16.pika.env.v1.StepReply\x12\x38\n\x04Step\x12\x18.pika.env.v1.StepRequest\x1a\x16.pika.env.v1.StepReply\x12>\n\x06Health\x12\x1a.pika.env.v1.HealthRequest\x1a\x18.pika.env.v1.HealthReply\x12P\n\x0c\x46\x65tchReplays\x12 .pika.env.v1.FetchReplaysRequest\x1a\x1e.pika.env.v1.FetchReplaysReplyB\x19\n\x0bpika.env.v1B\x08\x45nvProtoP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,24 +32,30 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'env_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\013pika.env.v1B\010EnvProtoP\001'
-  _globals['_SLOTKIND']._serialized_start=1499
-  _globals['_SLOTKIND']._serialized_end=1579
+  _globals['_SLOTKIND']._serialized_start=1777
+  _globals['_SLOTKIND']._serialized_end=1857
   _globals['_REWARDWEIGHTS']._serialized_start=26
   _globals['_REWARDWEIGHTS']._serialized_end=146
   _globals['_CONFIGUREREQUEST']._serialized_start=149
-  _globals['_CONFIGUREREQUEST']._serialized_end=776
-  _globals['_CONFIGUREREPLY']._serialized_start=779
-  _globals['_CONFIGUREREPLY']._serialized_end=969
-  _globals['_RESETREQUEST']._serialized_start=971
-  _globals['_RESETREQUEST']._serialized_end=1043
-  _globals['_STEPREQUEST']._serialized_start=1045
-  _globals['_STEPREQUEST']._serialized_end=1095
-  _globals['_STEPREPLY']._serialized_start=1097
-  _globals['_STEPREPLY']._serialized_end=1224
-  _globals['_HEALTHREQUEST']._serialized_start=1226
-  _globals['_HEALTHREQUEST']._serialized_end=1241
-  _globals['_HEALTHREPLY']._serialized_start=1244
-  _globals['_HEALTHREPLY']._serialized_end=1497
-  _globals['_PIKAENV']._serialized_start=1582
-  _globals['_PIKAENV']._serialized_end=1846
+  _globals['_CONFIGUREREQUEST']._serialized_end=876
+  _globals['_CONFIGUREREPLY']._serialized_start=879
+  _globals['_CONFIGUREREPLY']._serialized_end=1069
+  _globals['_RESETREQUEST']._serialized_start=1071
+  _globals['_RESETREQUEST']._serialized_end=1143
+  _globals['_STEPREQUEST']._serialized_start=1145
+  _globals['_STEPREQUEST']._serialized_end=1195
+  _globals['_STEPREPLY']._serialized_start=1197
+  _globals['_STEPREPLY']._serialized_end=1324
+  _globals['_HEALTHREQUEST']._serialized_start=1326
+  _globals['_HEALTHREQUEST']._serialized_end=1341
+  _globals['_HEALTHREPLY']._serialized_start=1344
+  _globals['_HEALTHREPLY']._serialized_end=1597
+  _globals['_FETCHREPLAYSREQUEST']._serialized_start=1599
+  _globals['_FETCHREPLAYSREQUEST']._serialized_end=1640
+  _globals['_FETCHREPLAYSREPLY']._serialized_start=1642
+  _globals['_FETCHREPLAYSREPLY']._serialized_end=1703
+  _globals['_RECORDEDGAME']._serialized_start=1705
+  _globals['_RECORDEDGAME']._serialized_end=1775
+  _globals['_PIKAENV']._serialized_start=1860
+  _globals['_PIKAENV']._serialized_end=2206
 # @@protoc_insertion_point(module_scope)

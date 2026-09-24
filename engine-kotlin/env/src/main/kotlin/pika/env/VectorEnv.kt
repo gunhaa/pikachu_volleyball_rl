@@ -41,6 +41,7 @@ class VectorEnv(
     val numEnvs: Int,
     val swappedEnvs: Int = 0,
     val recordReplays: Boolean = false,
+    val replayFrameCap: Int = ReplayRecorder.DEFAULT_CAP,
 ) {
 
     var config: EnvConfig = config
@@ -69,7 +70,7 @@ class VectorEnv(
         lateinit var env: PikaEnv
         // sink 는 게임이 끝나거나 잘린 그 스텝 안에서 불린다 — 아직 다음 게임을 시작하기 전이라
         // gameCounter - 1 이 이 게임의 번호다.
-        val recorder = ReplayRecorder(SeedMode.RALLY) { recorded.addLast(RecordedGame(i, env.gameCounter - 1, it)) }
+        val recorder = ReplayRecorder(SeedMode.RALLY, replayFrameCap) { recorded.addLast(RecordedGame(i, env.gameCounter - 1, it)) }
         env = PikaEnv(configFor(i), i, recorder)
         return env
     }

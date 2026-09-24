@@ -12,11 +12,16 @@ import pika.env.RewardWeights
 import pika.env.Slot
 import pika.env.Slots
 import pika.env.VectorEnv
+import pika.env.replay.ReplayCodec
+import pika.env.replay.ReplayRecorder
 import pika.env.v1.ConfigureReply
 import pika.env.v1.ConfigureRequest
+import pika.env.v1.FetchReplaysReply
+import pika.env.v1.FetchReplaysRequest
 import pika.env.v1.HealthReply
 import pika.env.v1.HealthRequest
 import pika.env.v1.PikaEnvGrpc
+import pika.env.v1.RecordedGame
 import pika.env.v1.ResetRequest
 import pika.env.v1.SlotKind
 import pika.env.v1.StepReply
@@ -100,7 +105,10 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                     },
                 )
 
-                val v = VectorEnv(cfg, numEnvs, swappedEnvs)
+                val recordReplays = request.hasRecordReplays() && request.recordReplays
+                val replayCap = if (request.hasReplayFrameCap()) request.replayFrameCap else ReplayRecorder.DEFAULT_CAP
+                if (replayCap <= 0) throw invalidArgument("replay_frame_cap 은 양수여야 합니다: $replayCap")
+                val v = VectorEnv(cfg, numEnvs, swappedEnvs, recordReplays, replayCap)
                 v.reset()
                 vec = v
                 config = cfg
@@ -159,6 +167,25 @@ class EnvService : PikaEnvGrpc.PikaEnvImplBase() {
                 totalEnvSteps += v.numEnvs.toLong()
 
                 buildReply(v)
+            }
+        }
+    }
+
+    override fun fetchReplays(request: FetchReplaysRequest, responseObserver: StreamObserver<FetchReplaysReply>) {
+        respond(responseObserver) {
+            synchronized(lock) {
+                val v = requireConfigured()
+                requireSession(request.sessionId)
+                val reply = FetchReplaysReply.newBuilder()
+                for (g in v.drainReplays()) {
+                    reply.addGames(
+                        RecordedGame.newBuilder()
+                            .setEnvIndex(g.envIndex)
+                            .setGameInEnv(g.gameInEnv)
+                            .setReplay(UnsafeByteOperations.unsafeWrap(ReplayCodec.encode(g.replay))),
+                    )
+                }
+                reply.build()
             }
         }
     }

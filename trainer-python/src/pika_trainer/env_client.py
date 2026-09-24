@@ -77,6 +77,10 @@ class EnvOptions:
     fixed_boldness: int = -1
     #: 항의 부호는 항 안에 있다. 가중치는 크기다 (plan.md §6.1).
     reward_weights: dict[str, float] = field(default_factory=lambda: {"rally_win": 1.0})
+    #: 끝난 게임을 리플레이로 기록한다 (Phase 4 FR-6). 꺼져 있으면 동작이 기록 기능 전과 같다.
+    record_replays: bool = False
+    #: 기록 상한. ⚠️ evaluate 의 ``max_game_frames`` 와 같아야 미결 게임과 잘린 리플레이가 짝이 맞는다.
+    replay_frame_cap: int = 60_000
 
     def obs_options(self) -> ObsOptions:
         return ObsOptions(
@@ -224,6 +228,8 @@ class PikaVectorEnv(VectorEnv):
             swapped_envs=options.swapped_envs,
             fixed_boldness=options.fixed_boldness,
             reward_weights=weights,
+            record_replays=options.record_replays,
+            replay_frame_cap=options.replay_frame_cap,
         )
         return self._stub.Configure(request)
 
@@ -351,6 +357,17 @@ class PikaVectorEnv(VectorEnv):
            있으면 과거 스텝의 값이 조용히 바뀐다. 그 버그는 손실 곡선에 드러나지 않는다.
         """
         return self._terms.copy()
+
+    # ── 리플레이 (Phase 4) ──────────────────────────────────────────────
+
+    def fetch_replays(self) -> list[tuple[int, int, bytes]]:
+        """서버에 쌓인 끝난 게임을 꺼낸다 — ``(env_index, game_in_env, 리플레이 v1 바이트)``.
+
+        서버 큐를 비운다. ``record_replays`` 가 꺼져 있으면 항상 빈 목록이다.
+        ⚠️ ``env_index`` 는 **서버 환경** 번호다. 행 번호는 ``env_index * slot_count + k`` 다.
+        """
+        reply = self._stub.FetchReplays(env_pb2.FetchReplaysRequest(session_id=self.session_id))
+        return [(g.env_index, g.game_in_env, bytes(g.replay)) for g in reply.games]
 
     # ── 진단 ────────────────────────────────────────────────────────────
 

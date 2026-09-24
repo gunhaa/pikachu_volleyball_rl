@@ -54,6 +54,11 @@ class PikaEnvStub:
                 request_serializer=env__pb2.HealthRequest.SerializeToString,
                 response_deserializer=env__pb2.HealthReply.FromString,
                 _registered_method=True)
+        self.FetchReplays = channel.unary_unary(
+                '/pika.env.v1.PikaEnv/FetchReplays',
+                request_serializer=env__pb2.FetchReplaysRequest.SerializeToString,
+                response_deserializer=env__pb2.FetchReplaysReply.FromString,
+                _registered_method=True)
 
 
 class PikaEnvServicer:
@@ -86,6 +91,15 @@ class PikaEnvServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def FetchReplays(self, request, context):
+        """기록된 게임(리플레이 v1 바이트)을 꺼내고 서버 큐를 비운다. (Phase 4 FR-6)
+        record_replays 가 꺼져 있으면 항상 비어 있다. 어느 게임을 집계에 넣을지는 클라이언트가
+        (env_index, game_in_env) 로 고른다 — 서버는 끝난 게임을 전부 쌓는다.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PikaEnvServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -108,6 +122,11 @@ def add_PikaEnvServicer_to_server(servicer, server):
                     servicer.Health,
                     request_deserializer=env__pb2.HealthRequest.FromString,
                     response_serializer=env__pb2.HealthReply.SerializeToString,
+            ),
+            'FetchReplays': grpc.unary_unary_rpc_method_handler(
+                    servicer.FetchReplays,
+                    request_deserializer=env__pb2.FetchReplaysRequest.FromString,
+                    response_serializer=env__pb2.FetchReplaysReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -218,6 +237,33 @@ class PikaEnv:
             '/pika.env.v1.PikaEnv/Health',
             env__pb2.HealthRequest.SerializeToString,
             env__pb2.HealthReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def FetchReplays(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pika.env.v1.PikaEnv/FetchReplays',
+            env__pb2.FetchReplaysRequest.SerializeToString,
+            env__pb2.FetchReplaysReply.FromString,
             options,
             channel_credentials,
             insecure,
