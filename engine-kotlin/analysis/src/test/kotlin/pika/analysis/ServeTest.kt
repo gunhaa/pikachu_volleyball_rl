@@ -1,0 +1,133 @@
+package pika.analysis
+
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import pika.conformance.RepoPaths
+import pika.env.replay.ReplayCodec
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.nio.file.Files
+import java.nio.file.Path
+import java.sql.Connection
+import java.util.concurrent.TimeUnit
+
+/** 뷰어 API (tasks.md P7, FR-15 · FR-18). MySQL 이 없으면 건너뛴다. */
+class ServeTest {
+
+    private lateinit var conn: Connection
+    private lateinit var serve: Serve
+    private val http = HttpClient.newHttpClient()
+
+    @BeforeEach
+    fun setUp() {
+        conn = DbTestSupport.freshDb()
+        serve = Serve(DbTestSupport.config, 0).start()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        serve.stop()
+        conn.close()
+    }
+
+    private fun url(p: String) = URI.create("http://127.0.0.1:${serve.port}/api/$p")
+    private fun get(p: String): HttpResponse<ByteArray> =
+        http.send(HttpRequest.newBuilder(url(p)).GET().build(), HttpResponse.BodyHandlers.ofByteArray())
+    private fun getJson(p: String): Any? = get(p).also { assertEquals(200, it.statusCode(), String(it.body())) }.let { Json.parse(String(it.body())) }
+    private fun post(p: String, body: ByteArray): HttpResponse<String> =
+        http.send(HttpRequest.newBuilder(url(p)).POST(HttpRequest.BodyPublishers.ofByteArray(body)).build(), HttpResponse.BodyHandlers.ofString())
+
+    @Test
+    @DisplayName("읽기: 묶음 · 게임 목록(필터) · 게임 · 리플레이 바이트 · 통계")
+    fun readEndpoints(@TempDir dir: Path) {
+        val replays = DbTestSupport.writeEvalDir(dir, "api-eval", games = 3)
+        Ingest.ingestDir(conn, dir)
+
+        val sets = getJson("sets").arr().map { it.obj() }
+        assertEquals(listOf("api-eval"), sets.map { it.str("name") })
+        assertEquals(3L, sets[0]["games"])
+
+        val list = getJson("games?set=api-eval&side=left").obj()
+        assertEquals(3L, list["total"])
+        assertEquals(0L, getJson("games?set=api-eval&side=right").obj()["total"], "정책은 왼쪽에만 있었다")
+        assertEquals(3L, getJson("games?set=api-eval&winner=1").obj()["total"], "무작위 정책은 FSM 을 못 이긴다")
+
+        val first = list["games"].arr()[0].obj()
+        val id = (first["id"] as Number).toLong()
+        val one = getJson("games/$id").obj()
+        assertEquals(ReplayChain.compute(replays[0]).finalHex, one.str("chain"))
+        assertArrayEquals(ReplayCodec.encode(replays[0]), get("games/$id/replay").body())
+
+        val stats = getJson("stats/api-eval?bin=100").obj()
+        assertEquals(replays.sumOf { it.rallyCount }.toLong(), stats["totals"].obj()["rallies"])
+        val scored = stats["landing"].arr().sumOf { (it.obj()["count"] as Number).toLong() }
+        assertEquals(replays.sumOf { r -> r.rallyOutcomes.count { it >= 0 } }.toLong(), scored)
+
+        assertEquals(404, get("games/999999").statusCode())
+        assertEquals(404, get("nope").statusCode())
+    }
+
+    @Test
+    @DisplayName("라이브 제출: 검증 통과만 적재 (묶음 live, External = 사람), 변조 · 미완은 422 이고 아무것도 안 들어간다")
+    fun liveSubmission(@TempDir dir: Path) {
+        val replay = DbTestSupport.writeEvalDir(dir, "x", games = 1).single()
+        val bytes = ReplayCodec.encode(replay)
+
+        val ok = post("live-games", bytes)
+        assertEquals(200, ok.statusCode(), ok.body())
+        val res = Json.parse(ok.body()).obj()
+        assertEquals(true, res["inserted"])
+        val game = getJson("games/${(res["id"] as Number).toLong()}").obj()
+        assertEquals("live", game.str("set"))
+        assertEquals("human", game["p1"].obj().str("kind"))
+        assertEquals("fsm", game["p2"].obj().str("kind"))
+
+        // 같은 경기를 다시 내면 새 행이 생기지 않는다.
+        assertEquals(false, Json.parse(post("live-games", bytes).body()).obj()["inserted"])
+
+        // 결과(랠리 outcome)를 바꾼 바이트 — 재생이 거절한다.
+        val tampered = bytes.copyOf()
+        val k = 18 + 4 * replay.seeds.size + 4 // 첫 랠리의 outcome
+        tampered[k] = (1 - tampered[k]).toByte()
+        val bad = post("live-games", tampered)
+        assertEquals(422, bad.statusCode(), bad.body())
+        assertEquals(1, DbTestSupport.count(conn, "game"))
+
+        assertEquals(422, post("live-games", byteArrayOf(1, 2, 3)).statusCode())
+    }
+
+    @Test
+    @DisplayName("M4-k 자동화 부분: JS 러너가 기록한 라이브 경기 → 제출 → 목록 → 받은 바이트 = 보낸 바이트, 체인 = JS 라이브 체인")
+    fun jsLiveGameRoundTrip(@TempDir dir: Path) {
+        org.junit.jupiter.api.Assumptions.assumeTrue(RepoPaths.upstreamIsPresent(), "upstream/ 이 없습니다")
+        val p = ProcessBuilder("node", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "test/export-live.mjs", dir.toString())
+            .directory(RepoPaths.root.resolve("viewer-web").toFile()).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().readText()
+        check(p.waitFor(2, TimeUnit.MINUTES) && p.exitValue() == 0) { out }
+        val games = Json.parse(Files.readString(dir.resolve("chains.json"))).obj()["games"].arr().map { it.obj() }
+        var submitted = 0
+        for (g in games) {
+            val bytes = Files.readAllBytes(dir.resolve(g.str("file")))
+            val res = post("live-games", bytes)
+            if (!ReplayCodec.decode(bytes).ended) {
+                assertEquals(422, res.statusCode(), "잘린 라이브는 받지 않는다")
+                continue
+            }
+            assertEquals(200, res.statusCode(), res.body())
+            val body = Json.parse(res.body()).obj()
+            assertEquals(g.str("final"), body.str("chain"), g.str("file"))
+            assertArrayEquals(bytes, get("games/${(body["id"] as Number).toLong()}/replay").body())
+            submitted++
+        }
+        assertTrue(submitted >= 5)
+        assertEquals(submitted.toLong(), getJson("games?set=live").obj()["total"])
+    }
+}

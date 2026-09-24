@@ -118,19 +118,29 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 브라우저에서 임의 경기를 원본 그래픽으로 재생하고, 같은 화면에서 사람 · FSM 라이브 대전을 한다. (FR-13, FR-15, FR-19, M4-h, M4-k)
 
-- [ ] `analysis serve` — `/api/sets`, `/api/games?set&side&winner&unresolved`, `/api/games/{id}/replay`, `/api/stats/{set}`
-- [ ] Vite 8.3.0 + `@pixi/*` 6.5.10, `@upstream` alias, `/api` 프록시
-- [ ] 에셋 로딩 — `ASSETS_PATH.SPRITE_SHEET` 덮어쓰기, `main.js` 의 렌더러 설정 따르기 (§8.2)
-- [ ] `GameView` 생성 전 · `drawCloudsAndWave` 전 `setCustomRng(viewRng)` (§5.2)
-- [ ] 재생기: 재생/정지, 속도, 시크바(그리지 않고 계산), 랠리 점프, 현재 점수 · 랠리 · 프레임 표시
-- [ ] 로드 시 체인 대조, 불일치면 경고 배너 (§8.2)
-- [ ] 목록 화면, 통계 화면 (SVG)
-- [ ] `KeyboardSource` — `PikaKeyboard` 를 감싼다, 두 사람 키 배치는 업스트림 기본값
-- [ ] 대전 설정 화면 — 좌·우 입력원 선택 (리플레이 · FSM · 사람, 정책은 비활성 표시)
-- [ ] 라이브 종료 시 `POST /api/live-games` → 서버가 `ingest` 와 같은 검증 후 적재 (§8.2)
-- [ ] **M4-k**: 사람 vs FSM 한 게임 → 제출 → 목록에 나타남 → 재생 시 체인 경고 없음
-- [ ] **M4-h**: 두 기준선에서 임의 게임 각 3개 — 끝까지 재생, 최종 점수 = DB, 60,000 프레임 게임 시크 ≤ 100 ms. 스크린샷 첨부
-- [ ] **확인**: `npm run build` 성공, 결과물이 `.gitignore` 대상인지 확인 (NFR-4)
+- [x] `analysis serve` — `/api/sets`, `/api/games?set&side&winner&unresolved`, `/api/games/{id}/replay`, `/api/stats/{set}`
+- [x] Vite 8.3.0 + `@pixi/*` 6.5.10, `@upstream` alias, `/api` 프록시
+- [x] 에셋 로딩 — `ASSETS_PATH.SPRITE_SHEET` 덮어쓰기, `main.js` 의 렌더러 설정 따르기 (§8.2)
+- [x] `GameView` 생성 전 · `drawCloudsAndWave` 전 `setCustomRng(viewRng)` (§5.2)
+      ⚠️ 계획에 없던 발견: 업스트림 `drawPlayersAndBall` 이 `ball.punchEffectRadius -= 2` 로 **물리 객체를 직접 줄인다**
+      (원작 FUN_00402ee0). 이 필드는 State Spec 해시에 들어간다. `view/guard.mjs` 의 DrawGuard 가 뷰 값을 잠깐
+      끼워 그리고 되돌린다 — Node 테스트 2개 (업스트림식 뷰로 그려도 체인 = 골든, 가드 없으면 바뀜)
+- [x] 재생기: 재생/정지, 속도, 시크바(그리지 않고 계산), 랠리 점프, 현재 점수 · 랠리 · 프레임 표시
+- [x] 로드 시 체인 대조, 불일치면 경고 배너 (§8.2)
+- [x] 목록 화면, 통계 화면 (SVG)
+- [x] `KeyboardSource` — `PikaKeyboard` 를 감싼다, 두 사람 키 배치는 업스트림 기본값
+- [x] 대전 설정 화면 — 좌·우 입력원 선택 (리플레이 · FSM · 사람, 정책은 비활성 표시)
+- [x] 라이브 종료 시 `POST /api/live-games` → 서버가 `ingest` 와 같은 검증 후 적재 (§8.2)
+- [x] **M4-k**: 사람 vs FSM 한 게임 → 제출 → 목록에 나타남 → 재생 시 체인 경고 없음
+      headless Chrome 153 + puppeteer-core(저장소 밖) 로 **실제 keydown/keyup** 을 보내 한 판 (5 : 15, 2,454 프레임,
+      117 s) → `적재됨 #3202 — 서버(Kotlin) 재생 체인 = 라이브 체인 ✓` → 목록 0 → 1 → 재생 체인 일치.
+      ⚠️ 사람 손으로 치는 한 판은 사용자 확인으로 남긴다 (키 배치 · 체감 속도는 자동화가 판단하지 못한다).
+      `ServeTest` 가 JS 러너 라이브 기록 5판의 제출 경로를 자동으로 본다
+- [x] **M4-h**: 두 기준선에서 임의 게임 각 3개 — 끝까지 재생, 최종 점수 = DB, 60,000 프레임 게임 시크 ≤ 100 ms. 스크린샷 첨부
+      FSM vs FSM #742 · #220 · #260, Track A #1037 · #1885 · #3121 — 전부 체인 배너 ✓, ×8 실재생 후 끝까지,
+      화면 점수 = DB. 60,000 프레임 진단 게임(`diagnostic-cap60000`) 시크 49.8 ~ 51.7 ms. 페이지 오류 0.
+      스크린샷: `runs/viewer-check/` (업스트림 그래픽이 들어 있어 커밋하지 않는다)
+- [x] **확인**: `npm run build` 성공, 결과물이 `.gitignore` 대상인지 확인 (NFR-4)
 
 ## P8. 회귀 · 문서 · 이관
 

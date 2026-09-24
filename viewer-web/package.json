@@ -5,6 +5,32 @@
   "type": "module",
   "description": "리플레이 뷰어 + 라이브 대전. 업스트림 physics.js 위에 경기 규칙층(GameRunner)을 얹는다. 로컬 전용 — 배포하지 않는다 (NFR-4).",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "vite": "8.3.0"
+  },
+  "dependencies": {
+    "@pixi/canvas-display": "6.5.10",
+    "@pixi/canvas-prepare": "6.5.10",
+    "@pixi/canvas-renderer": "6.5.10",
+    "@pixi/canvas-sprite": "6.5.10",
+    "@pixi/constants": "6.5.10",
+    "@pixi/core": "6.5.10",
+    "@pixi/display": "6.5.10",
+    "@pixi/extensions": "6.5.10",
+    "@pixi/loaders": "6.5.10",
+    "@pixi/math": "6.5.10",
+    "@pixi/prepare": "6.5.10",
+    "@pixi/runner": "6.5.10",
+    "@pixi/settings": "6.5.10",
+    "@pixi/sprite": "6.5.10",
+    "@pixi/sprite-animated": "6.5.10",
+    "@pixi/spritesheet": "6.5.10",
+    "@pixi/ticker": "6.5.10",
+    "@pixi/utils": "6.5.10"
   }
 }
