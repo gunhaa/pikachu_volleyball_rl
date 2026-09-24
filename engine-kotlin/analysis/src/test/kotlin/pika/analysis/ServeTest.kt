@@ -24,12 +24,14 @@ class ServeTest {
 
     private lateinit var conn: Connection
     private lateinit var serve: Serve
+    private lateinit var liveDir: Path
     private val http = HttpClient.newHttpClient()
 
     @BeforeEach
     fun setUp() {
         conn = DbTestSupport.freshDb()
-        serve = Serve(DbTestSupport.config, 0).start()
+        liveDir = Files.createTempDirectory("pika-live-")
+        serve = Serve(DbTestSupport.config, 0, liveDir).start()
     }
 
     @AfterEach
@@ -92,6 +94,13 @@ class ServeTest {
 
         // 같은 경기를 다시 내면 새 행이 생기지 않는다.
         assertEquals(false, Json.parse(post("live-games", bytes).body()).obj()["inserted"])
+
+        // 원본은 파일로도 남는다 — DB 를 지워도 `ingest <liveDir> --kind live` 로 되살아난다.
+        assertEquals(1, Files.readAllLines(liveDir.resolve("manifest.jsonl")).size, "중복 제출은 manifest 에 한 줄만")
+        conn.createStatement().use { it.executeUpdate("DELETE FROM game") }
+        val restored = Ingest.ingestDir(conn, liveDir, kind = "live")
+        assertEquals(1, restored.inserted)
+        assertEquals("human", getJson("games?set=live").obj()["games"].arr()[0].obj()["p1"].obj().str("kind"))
 
         // 결과(랠리 outcome)를 바꾼 바이트 — 재생이 거절한다.
         val tampered = bytes.copyOf()

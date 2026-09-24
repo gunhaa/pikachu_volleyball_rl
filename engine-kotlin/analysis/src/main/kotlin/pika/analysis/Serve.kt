@@ -21,11 +21,15 @@ import java.util.concurrent.Executors
  * | GET  /api/stats/{set}?bin=50            | 랠리 길이 · 착지 x · 파워히트 집계 |
  * | POST /api/live-games                    | **유일한 쓰기.** 라이브 경기 바이트 → ingest 와 같은 검증 → 묶음 `live` |
  *
+ * ⚠️ 라이브 경기는 DB 에만 두지 않는다. 검증을 통과한 바이트를 [liveDir] 에 `manifest.jsonl` 과 함께 남긴다 —
+ *    DB 는 캐시라서(plan.md §6.3) 볼륨을 지우면 사라지고, 기준선과 달리 라이브는 다시 만들 수 없다.
+ *    되살리기: `analysis ingest runs/live --kind live`.
+ *
  * ⚠️ 라이브 제출은 브라우저를 신뢰하지 않는다. 받은 것은 바이트뿐이고, 참가자는 슬롯 플래그에서
  *    유도하며(External = 사람, 아니면 FSM), 재생 검증을 통과해야만 적재한다. JS 규칙층이 틀려
  *    있으면 여기서 드러난다.
  */
-class Serve(private val db: Db.Config, port: Int) {
+class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.file.Path) {
 
     private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", port), 0)
     val port: Int get() = server.address.port
@@ -178,9 +182,31 @@ class Serve(private val db: Db.Config, port: Int) {
         fun who(external: Boolean) = if (external) Ingest.Participant("human", null, "keyboard") else Ingest.Participant.FSM
         val verified = Ingest.verify("live", body, who(flags and 1 != 0), who(flags and 2 != 0))
         if (!verified.replay.ended) throw HttpError(422, "끝나지 않은 라이브 경기는 받지 않습니다")
+        keepLiveFile(verified)
         val result = Ingest.insert(conn, LIVE_SET, "live", listOf(verified), note = "브라우저 라이브 대전 (P7)")
         val id = rows(conn, "SELECT id FROM game WHERE replay_sha256 = ?", listOf(verified.sha256)) { it.getLong(1) }.single()
         return linkedMapOf("id" to id, "inserted" to (result.inserted == 1), "chain" to verified.chain.finalHex, "score" to verified.replay.finalScore.toList())
+    }
+
+    /** 라이브 원본을 파일로 — 이미 있으면(같은 경기) 건너뛴다. manifest 는 ingest 가 읽는 모양 그대로. */
+    @Synchronized
+    private fun keepLiveFile(v: Ingest.Verified) {
+        java.nio.file.Files.createDirectories(liveDir)
+        val file = "${v.sha256}.pkr"
+        val path = liveDir.resolve(file)
+        if (java.nio.file.Files.exists(path)) return
+        java.nio.file.Files.write(path, v.bytes)
+        fun who(p: Ingest.Participant) = linkedMapOf("kind" to p.kind, "label" to p.label)
+        val line = Json.write(
+            linkedMapOf(
+                "file" to file, "set" to LIVE_SET, "envIndex" to null, "gameInEnv" to null,
+                "p1" to who(v.p1), "p2" to who(v.p2), "counted" to true, "unresolved" to false,
+            ),
+        )
+        java.nio.file.Files.writeString(
+            liveDir.resolve("manifest.jsonl"), line + "\n",
+            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND,
+        )
     }
 
     // ── 자잘한 것 ─────────────────────────────────────────────────────────

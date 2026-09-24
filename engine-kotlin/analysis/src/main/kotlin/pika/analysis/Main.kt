@@ -24,7 +24,8 @@ object Main {
           report --set <name> [--expect <json>]
                                          DB 집계 (SideStats 모양). --expect 와 다르면 exit 1 (M4-c · M4-d)
           replay-hashes                  DB 의 replay_sha256 집합 digest (재생성 결정론 확인)
-          serve [--port 8081]            뷰어용 HTTP API (127.0.0.1 전용)
+          serve [--port 8081] [--live-dir runs/live]
+                                         뷰어용 HTTP API (127.0.0.1 전용). 라이브 원본은 live-dir 에도 남긴다
 
         DB 옵션: --db-url <jdbc> --db-user <u> --db-password <p>  (환경 변수 PIKA_DB_URL 등, 기본 compose 값)
     """.trimIndent()
@@ -75,8 +76,9 @@ object Main {
             "serve" -> {
                 val config = Db.Config.from(opts)
                 Db.open(config).close() // 스키마 버전을 먼저 본다
-                val s = Serve(config, opts.int("--port", 8081)).start()
-                println("serve: http://127.0.0.1:${s.port}/api/ (Ctrl+C 로 종료)")
+                val liveDir = opts.path("--live-dir") ?: Paths.get("runs/live")
+                val s = Serve(config, opts.int("--port", 8081), liveDir).start()
+                println("serve: http://127.0.0.1:${s.port}/api/ · 라이브 원본 → ${liveDir.toAbsolutePath()} (Ctrl+C 로 종료)")
             }
             "replay-hashes" -> Db.open(Db.Config.from(opts)).use { conn ->
                 val hashes = conn.createStatement().use { st ->
