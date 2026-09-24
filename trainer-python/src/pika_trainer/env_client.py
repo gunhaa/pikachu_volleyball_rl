@@ -50,7 +50,7 @@ ACTION_COUNT = 18
 #: (PRD §2.4 — 뒷벽이 20px 다르다). 플래그를 켜면 정책이 두 진영의 중간값으로 헤지하는
 #: 대신 진영별 위치 선정을 낼 수 있다. 관측은 40 → 41차원이 된다.
 #:
-#: ⚠️ Track A(Phase 3)와 Track B(Phase 4)가 **같은 값**을 써야 Phase 5 의 동일 예산 비교가
+#: ⚠️ Track A(Phase 3)와 Track B(Phase 6)가 **같은 값**을 써야 Phase 7 의 동일 예산 비교가
 #:    성립한다. 어긋나면 레이아웃 해시 대조가 붙는 즉시 실패시키지만, 애초에 갈라지지
 #:    않도록 러너들은 :meth:`EnvOptions.for_policy` 를 통해서만 구성을 만든다.
 OBS_INCLUDE_SIDE_FLAG = True

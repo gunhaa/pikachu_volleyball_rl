@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * ─────────────────────────────────────────────────────────────────────────────
  * 전송: Unix domain socket 우선, TCP 도 지원
  * ─────────────────────────────────────────────────────────────────────────────
- * UDS 는 TCP 루프백보다 지연이 낮고, Phase 7 에서 주소만 바꾸면 TCP 로 간다.
+ * UDS 는 TCP 루프백보다 지연이 낮고, Phase 8 에서 주소만 바꾸면 TCP 로 간다.
  *
  * **NIO 도메인 소켓**을 쓴다 (`NioServerDomainSocketChannel`). netty 의 epoll 도메인
  * 소켓이 리눅스에서 조금 더 빠르지만 **리눅스 전용**이라, 개발 기계(macOS)에서 UDS 를

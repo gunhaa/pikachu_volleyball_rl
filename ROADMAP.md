@@ -6,11 +6,15 @@
 |---|---|---|---|
 | 1 | RL binary 로 FSM(컴퓨터)을 이긴다 | Track A | vs FSM 승률 ≥ 90% |
 | 2 | zero 학습으로 AI 끼리 대전시킨다 | Track B | 학습 중 FSM 미사용 |
-| 3 | 그 결과로 다시 FSM 과 대전한다 | Track B 평가 | vs FSM 승률 ≥ 70% (held-out) | | |
+| 3 | 그 결과로 다시 FSM 과 대전한다 | Track B 평가 | vs FSM 승률 ≥ 70% (held-out) |
 
 - **Track A**: 랜덤 초기화 → FSM 상대로 학습.
+- **Track A+**: Track A 가중치에서 출발 → 자기 자신/과거 체크포인트하고만 학습. 이 트랙은 **zero 가 아니다** —
+  FSM 을 상대로 배운 지식을 물려받는다. 목표 2·3 에는 산입하지 않고, "FSM 을 이긴 정책이 셀프플레이로
+  더 강해지는가" 를 잰다.
 - **Track B**: 랜덤 초기화 → 자기 자신/과거 체크포인트하고만 학습. **FSM 을 학습 중 한 번도 보지 않는다.**
-- 두 트랙은 **환경 스텝 예산을 동일하게** 맞춘다. 맞추지 않으면 비교가 성립하지 않는다.
+- Track A 와 Track B 는 **환경 스텝 예산을 동일하게** 맞춘다. 맞추지 않으면 비교가 성립하지 않는다.
+  Track A+ 는 Track A 의 스텝을 포함한 **누적 예산**으로 보고한다.
 
 ---
 
@@ -59,11 +63,11 @@
 | `engine-kotlin/server` | Kotlin + gRPC (grpc-java) | 배치 스텝 RPC, 헬스체크/메트릭 |
 | `engine-kotlin/analysis` | Kotlin | 경기 통계, 리플레이 인코딩, MySQL 적재 |
 | `engine-kotlin/conformance` | Kotlin + Node | JS 차분 테스트 하네스 |
-| `trainer-python` | Python 3.12, PyTorch, Gymnasium | PPO, Track A/B 러너, 리그, ONNX export |
+| `trainer-python` | Python 3.12, PyTorch, Gymnasium | PPO, Track A/A+/B 러너, 리그, ONNX export |
 | `viewer-web` | PixiJS | 리플레이 재생 |
 | `proto/` | protobuf | State Spec 및 gRPC 계약 (언어 간 단일 진실 공급원) |
 | MySQL 8.4 | — | 경기 지표 · 리플레이 · MLflow backend store |
-| `deploy/compose` · `deploy/k3s` | Docker / k3s | Phase 0~6 compose, Phase 7 k3s |
+| `deploy/compose` · `deploy/k3s` | Docker / k3s | Phase 0~7 compose, Phase 8 k3s |
 
 ---
 
@@ -85,10 +89,11 @@
 | **1** | 물리 엔진 동치성 확보 | `core`, `conformance`, `proto`(State Spec) | 상태 해시 100% 일치, 분기 커버리지 ≥ 95% | ✅ 2026-09-21 |
 | **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | ✅ 2026-09-23 |
 | **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) | |
-| **4** | Track B — zero 셀프플레이 | `track_b.py`, `league.py` | vs FSM 승률 ≥ 70% (held-out) | |
-| **5** | 두 트랙 비교 | 비교 리포트 | A vs B 대결 + 학습 곡선 분석 완료 | |
-| **6** | 분석과 리플레이 | `analysis`, MySQL 스키마, `viewer-web` | 임의 경기를 브라우저에서 재현 | |
-| **7** | 수평 확장 | `deploy/k3s`, (필요 시) ONNX rollout | replica 증가 시 처리량 선형 증가 | |
+| **4** | 분석과 리플레이 | `analysis`, MySQL 스키마, `viewer-web` | FSM vs FSM · Track A vs FSM 임의 경기를 브라우저에서 재현 | |
+| **5** | Track A+ — Track A 가중치 셀프플레이 | `league.py`, `track_a_plus.py` | Track A 원본과 직접 대결 승률 > 50% (양 진영) + vs FSM ≥ 90% 유지 | |
+| **6** | Track B — zero 셀프플레이 | `track_b.py` (리그 재사용) | vs FSM 승률 ≥ 70% (held-out) | |
+| **7** | 세 트랙 비교 | 비교 리포트 | A · A+ · B 상호 대결 + 학습 곡선 분석 완료 | |
+| **8** | 수평 확장 | `deploy/k3s`, (필요 시) ONNX rollout | replica 증가 시 처리량 선형 증가 | |
 
 ### Phase 0 — 저장소 기반
 
@@ -159,11 +164,11 @@ bidi 스트리밍(예비안)은 필요 없었다. **측정이 그렇게 말했�
 2. **슬로모션 6프레임을 재현하지 않는다.** 업스트림은 착지 후 `slowMotionFramesLeft = 6` 동안
    물리를 더 돌리고 그 6프레임도 RNG 를 소비한다. `env` 는 착지 즉시 랠리를 끝낸다.
    → **프레임 물리는 동치이지만 랠리 경계의 프레임 수가 다르다.**
-   Phase 6 의 리플레이 뷰어는 **반드시 같은 규칙**을 써야 한다.
+   Phase 4 의 리플레이 뷰어는 **반드시 같은 규칙**을 써야 한다.
 
 3. **리플레이 재현 키는 `(시드, 입력 시퀀스, 상대 구성)` 이다.** FSM 이 RNG 를 소비하므로
    상대가 FSM 이냐 정책이냐에 따라 난수 스트림이 갈라진다. 상대 구성을 함께 저장하지 않으면
-   이미 저장한 리플레이를 재생할 수 없다. Phase 6 이 스키마를 만들 때 이 사실이 전제다.
+   이미 저장한 리플레이를 재생할 수 없다. Phase 4 가 스키마를 만들 때 이 사실이 전제다.
 
 4. **FSM 은 에이전트보다 반 프레임 최신 정보를 본다.** 에이전트의 입력은
    `runEngineForNextFrame` 호출 **전**에 정해지고, FSM 은 그 **안에서** 공이 이미 움직인 뒤에
@@ -236,7 +241,7 @@ bidi 스트리밍(예비안)은 필요 없었다. **측정이 그렇게 말했�
 4. **진영 분할 장치** — `EnvOptions.for_policy()` 하나가 진영 플래그(41차원)와
    `swapped_envs = num_envs // 2` 를 함께 준다. 러너가 직접 `EnvOptions` 를 만들면 둘을
    빠뜨릴 수 있고, 그 사고는 승률이 이상해지기 전까지 드러나지 않는다.
-   **Track B 도 반드시 이 함수를 쓴다** — 관측 차원이 갈라지면 Phase 5 의 동일 예산 비교가 무효다.
+   **Track B 도 반드시 이 함수를 쓴다** — 관측 차원이 갈라지면 Phase 7 의 동일 예산 비교가 무효다.
 5. **⚠️ 미러링은 관측에만 걸리고 행동에는 걸리지 않는다** (`ObsEncoder` 에만 있다).
    오른쪽 진영의 정책은 "관측상 네트 방향" 과 "행동 `x=+1` 방향" 이 **서로 반대**인 상태로
    학습한다. 진영 플래그 1비트가 감당하는 것은 벽 비대칭(20px)만이 아니라 **행동 좌표계
@@ -251,29 +256,55 @@ bidi 스트리밍(예비안)은 필요 없었다. **측정이 그렇게 말했�
    `is_reportable = False` — 원인을 찾기 전까지 승률을 보고하지 않는다.
 7. **평가는 별도 서버 프로세스를 쓴다.** 서버는 단일 테넌트(`session_id`)라서 평가가 학습
    서버에 `Configure` 를 부르면 학습 세션이 그 자리에서 죽는다. 러너가 JVM 을 둘 띄운다.
-8. **`ppo.py` 는 상대를 모른다** (NFR-4, AST 검사로 강제). Track B 가 그대로 재사용한다.
+8. **`ppo.py` 는 상대를 모른다** (NFR-4, AST 검사로 강제). Track A+ 와 Track B 가 그대로 재사용한다.
    FSM 을 아는 Python 파일은 `track_a.py` 와 `evaluate.py` 둘뿐이고, 그 "안다" 가 실제로
    나타나는 곳은 `p1="external", p2="fsm"` 한 줄이다.
 9. **FSM 의 반 프레임 정보 우위는 그대로다** (Phase 2 기록 4번). 에이전트의 입력은
    `runEngineForNextFrame` **전**에 정해지고 FSM 은 그 **안에서** 공이 움직인 뒤에 결정한다
    (최대 20px). Track A 의 100% 는 **그 불리함을 안고 낸 결과**다.
 
-### Phase 4 — Track B
+### Phase 4 — 분석 + 리플레이
+
+학습을 더 하기 전에 **경기를 눈으로 볼 수 있게** 만든다. 셀프플레이는 스칼라 지표가 멀쩡한데 행동이
+퇴화하는 일(저글링, 끝나지 않는 랠리)이 흔하고, Phase 3 기록 2번대로 truncation 은 그것을 늦게 잡는다.
+Phase 5·6 의 디버깅 도구이자 Phase 7 "플레이 스타일 차이" 의 재료다.
+
+- 리플레이는 `(seed, inputSeq[2][T], 상대 구성, metadata)` 로 경기당 수 KB (Phase 2 기록 3번).
+  **상대 구성은 FSM 만이 아니라 체크포인트 ID 를 담을 수 있어야 한다** — Phase 5·6 의 정책 vs 정책 경기.
+- 뷰어는 `env` 와 **같은 랠리 경계 규칙**(슬로모션 6프레임 없음)을 쓴다 (Phase 2 기록 2번).
+- 적재 대상: 랠리 길이 분포, 착지 지점 히트맵, 파워히트 성공률.
+- **기준선 두 벌을 먼저 만든다.**
+  - **FSM vs FSM** — "정상 게임" 의 기준선. 800게임 재현값(799/800, 11,998:4,169)과 진영 비대칭이
+    뷰어와 통계에서 그대로 보여야 한다.
+  - **Track A vs FSM** — 2,400게임 15:0 이 **어떻게** 나왔는지. Phase 5 의 출발점이다.
+
+### Phase 5 — Track A+ (Track A 가중치 셀프플레이)
+
+Track A 의 최종 가중치(시드 0~2)에서 출발해 **자기 자신/과거 체크포인트하고만** 학습한다.
+FSM 은 학습에 쓰지 않고 **평가에만** 쓴다. `ppo.py` 는 그대로, 새로 생기는 것은 상대 풀(`league.py`)이다 —
+Phase 6 이 이 리그를 그대로 재사용하므로 여기서 먼저 검증한다.
+
+- 상대 풀: 현재 정책 + 과거 체크포인트. **Track A 원본을 풀에 고정으로 둔다** (기준점이자 망각 방지).
+- 셰이핑: Track A 가중치는 이미 공을 친다 → 신호가 0 이 아니므로 `rally_win` 단독으로 시작한다.
+- ⚠️ **망각을 잰다.** 셀프플레이로 강해지는 동안 FSM 대응을 잊을 수 있다. vs FSM 승률을 평가기로
+  주기적으로 재고, 1.0 에서 떨어지면 그 시점의 리플레이를 Phase 4 뷰어로 본다.
+- ⚠️ 결정론 정책끼리는 **끝나지 않는 게임**이 FSM 상대보다 더 쉽게 생긴다 (Phase 3 기록 6번). 미결 비율을 함께 보고한다.
+- 목표 2·3 에는 산입하지 않는다 (zero 가 아니다).
+
+### Phase 6 — Track B (zero 셀프플레이)
 
 **다시 랜덤 초기화에서 시작.** 상대 풀은 과거 체크포인트 70% / 현재 정책 30%, FSM 0%.
-학습 루프에서 FSM 접근을 코드 레벨로 차단한다.
-랜덤 정책끼리는 공을 못 쳐 보상 신호가 없으므로 셰이핑 보상이 필수이고 어닐링을 훨씬 늦춘다.
+학습 루프에서 FSM 접근을 코드 레벨로 차단한다. Phase 5 의 `league.py` 를 재사용한다.
+랜덤 정책끼리는 공을 못 쳐 보상 신호가 없으므로 셰이핑 보상이 필수이고 어닐링을 훨씬 늦춘다
+(Phase 3 기록 1번).
 
-### Phase 5 — 두 트랙 비교
+### Phase 7 — 세 트랙 비교
 
-Track A vs Track B 직접 대결, 동일 스텝 예산 학습 곡선, 플레이 스타일 차이를 정리한다.
+Track A · A+ · B 상호 대결(양 진영), 학습 곡선, 플레이 스타일 차이를 정리한다.
+A 와 B 는 동일 스텝 예산으로, A+ 는 누적 예산으로 비교한다.
 
-### Phase 6 — 분석 + 리플레이
-
-랠리 길이 분포, 착지 지점 히트맵, 파워히트 성공률을 MySQL 에 적재하고 뷰어로 재생한다.
-리플레이는 `(seed, inputSeq[2][T], metadata)` 로 경기당 수 KB.
-
-### Phase 7 — k3s
+### Phase 8 — k3s
 
 compose 구성을 k3s 매니페스트로 옮기고 엔진을 수평 확장한다.
 스텝 RPC 가 병목이면 ONNX rollout 방식으로 전환한다.
+Phase 3 측정상 엔진은 예산의 1% 도 쓰지 않으므로, **병목이 측정되기 전에는 착수하지 않는다.**

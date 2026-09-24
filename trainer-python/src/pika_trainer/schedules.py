@@ -138,7 +138,7 @@ def track_a_weighting(term_names: Sequence[str]) -> RewardWeighting:
 
     `PRD.md` §2.3 이 말한 대로 Track A 의 출발 신호는 0 이 아니다 (랠리 승률 4.5%,
     접촉 37%). 셰이핑은 필수가 아니라 가속 장치이므로 **작게 걸고 빨리 끈다** —
-    이것이 Track B(Phase 4)와 정반대인 이유다.
+    이것이 Track B(Phase 6)와 정반대인 이유다.
 
     `opponent_miss` 는 `rally_win` 과 중복이고, `time_penalty` 는 랠리를 짧게 만드는 힘이
     이미 있으므로 둘 다 0 이다.

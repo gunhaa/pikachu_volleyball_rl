@@ -309,8 +309,8 @@ def test_for_policy_turns_on_the_side_flag(env_target: str):
     """학습기와 평가기가 **하나의 상수**를 공유한다 (FR-14).
 
     미러링은 오른쪽 관측을 왼쪽 시점으로 뒤집지만 이 게임은 좌우 대칭이 아니다.
-    플래그가 없으면 정책은 두 진영의 중간값으로 헤지한다. Track B(Phase 4)도 같은
-    값을 써야 Phase 5 의 동일 예산 비교가 성립한다.
+    플래그가 없으면 정책은 두 진영의 중간값으로 헤지한다. Track B(Phase 6)도 같은
+    값을 써야 Phase 7 의 동일 예산 비교가 성립한다.
     """
     from pika_trainer.env_client import OBS_INCLUDE_SIDE_FLAG
 

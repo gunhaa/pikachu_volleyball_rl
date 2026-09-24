@@ -141,7 +141,7 @@ def test_cli_defaults_match_dataclass():
 
 
 def test_metrics_schema(env_target, tmp_path):
-    """`plan.md` §11 이 고정한 키. **Phase 5 가 두 트랙을 이 키로 겹쳐 그린다.**"""
+    """`plan.md` §11 이 고정한 키. **Phase 7 이 두 트랙을 이 키로 겹쳐 그린다.**"""
     run = RunDir.create("schema", root=tmp_path)
     with TrackARunner(env_target, small(seed=1), run=run, verbose=False) as runner:
         runner.train()
@@ -178,7 +178,7 @@ def test_metrics_schema(env_target, tmp_path):
 
 
 def test_observation_is_41_dim(env_target):
-    """진영 플래그가 켜져 있다 (FR-14). Track B 의 전제이고, 꺼지면 Phase 5 비교가 무효다."""
+    """진영 플래그가 켜져 있다 (FR-14). Track B 의 전제이고, 꺼지면 Phase 7 비교가 무효다."""
     with TrackARunner(env_target, small(), verbose=False) as runner:
         assert runner.env.obs_dim == 41
         assert runner.net.obs_dim == 41
