@@ -18,6 +18,7 @@ object Main {
                                          프레임별 State Spec 44필드 (JS 불일치 추적용)
           ingest <dir> [--kind eval|baseline|selfplay] [--note <text>]
                                          manifest.jsonl + *.pkr → 재생 검증 → DB (전부 아니면 전무)
+          rebuild-stats [--set <name>]   리플레이 BLOB 에서 rally · power_hit 를 다시 파생
 
         DB 옵션: --db-url <jdbc> --db-user <u> --db-password <p>  (환경 변수 PIKA_DB_URL 등, 기본 compose 값)
     """.trimIndent()
@@ -41,6 +42,9 @@ object Main {
                     exitProcess(1)
                 }
                 println("$dir: $result")
+            }
+            "rebuild-stats" -> Db.open(Db.Config.from(opts)).use { conn ->
+                println("통계 재계산: ${Ingest.rebuildStats(conn, opts.str("--set"))} 게임")
             }
             else -> {
                 System.err.println("알 수 없는 명령: ${args[0]}\n$USAGE")

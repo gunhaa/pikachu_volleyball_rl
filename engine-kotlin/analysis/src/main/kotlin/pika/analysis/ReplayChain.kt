@@ -1,6 +1,7 @@
 package pika.analysis
 
 import pika.conformance.StateSpec
+import pika.env.PikaGame
 import pika.env.replay.Replay
 import pika.env.replay.ReplayPlayer
 
@@ -27,7 +28,8 @@ object ReplayChain {
         val play: ReplayPlayer.PlayResult,
     )
 
-    fun compute(replay: Replay): Result {
+    /** @param extra 같은 재생에 얹을 리스너 (통계 수집 — 재생을 두 번 돌리지 않는다). */
+    fun compute(replay: Replay, extra: ((PikaGame, Int, Int?) -> Unit)? = null): Result {
         val digest = StateSpec.sha256()
         val ints = IntArray(StateSpec.intCount(strict = false))
         val bytes = ByteArray(ints.size * 4)
@@ -38,6 +40,7 @@ object ReplayChain {
             StateSpec.packInts(ints, bytes)
             chain = StateSpec.chainStep(digest, chain, bytes)
             if ((frame + 1) % INTERVAL == 0) checkpoints += StateSpec.toHex(chain)
+            extra?.invoke(game, frame, scorer)
         }
         return Result(StateSpec.toHex(chain), checkpoints, play)
     }

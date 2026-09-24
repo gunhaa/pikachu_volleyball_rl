@@ -81,12 +81,13 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 > 랠리 · 착지 · 파워히트를 리플레이에서 계산한다. (FR-11)
 
-- [ ] `StatsCollector` — `ReplayPlayer` 프레임 콜백 (`plan.md` §6.4 정의 그대로)
-- [ ] `rally` · `power_hit` 적재를 `ingest` 에 연결
-- [ ] `rebuild-stats [--set]`
-- [ ] 테스트: 손으로 만든 짧은 시나리오 — 파워히트 성공 1 · 실패 1 (상대 터치) · 착지 x 값
-- [ ] 테스트: 통계의 랠리 수 · 프레임 합 = 게임 행의 값
-- [ ] **확인**: `rebuild-stats` 전후 통계 테이블 동일
+- [x] `StatsCollector` — `ReplayPlayer` 프레임 콜백 (`plan.md` §6.4 정의 그대로)
+      ⚠️ 파워히트만 정의를 바꿨다: `isPowerHit` false→true 가 아니라 **터치 직후 `isPowerHit`**. 엔진이 충돌마다 덮어쓰므로 파워히트를 파워히트로 받아치면(true→true) 전환 기준은 놓친다. 착지 x 는 432 도 나온다 — 마지막 구간에 포함
+- [x] `rally` · `power_hit` 적재를 `ingest` 에 연결
+- [x] `rebuild-stats [--set]`
+- [x] 테스트: 손으로 만든 짧은 시나리오 — 파워히트 성공 1 · 실패 1 (상대 터치) · 착지 x 값
+- [x] 테스트: 통계의 랠리 수 · 프레임 합 = 게임 행의 값
+- [x] **확인**: `rebuild-stats` 전후 통계 테이블 동일
 
 ## P6. 기준선 두 벌
 
