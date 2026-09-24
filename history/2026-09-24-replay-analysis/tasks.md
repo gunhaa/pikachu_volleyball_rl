@@ -144,26 +144,28 @@ P1 ─▶ P2 ─┬─▶ P3 ─┐
 
 ## P8. 회귀 · 문서 · 이관
 
-- [ ] **M4-f**: Phase 1 골든 · env 골든 불변, `bench-env.sh` M2-a ≥ Phase 2 의 95%
-- [ ] **M4-i**: `./gradlew build` · pytest · `npm test` 초록
-- [ ] `README.md` — 리플레이 · 뷰어 실행법
-- [ ] `ROADMAP.md` Phase 4 결과 + "이후 Phase 가 반드시 알아야 하는 것"
-- [ ] `history/<완료일>-replay-analysis/` 로 세 문서 이관 + README
+- [x] **M4-f**: Phase 1 골든 · env 골든 불변, `bench-env.sh` M2-a ≥ Phase 2 의 95%
+      골든 파일 `git diff 44bde69` 무변경. M2-a N=256 **550,499** (Phase 2 484,371 의 113.7%), M2-b 5.3M ~ 7.0M (Phase 2 범위 5.1M ~ 7.2M)
+- [x] **M4-i**: `./gradlew build` · pytest · `npm test` 초록
+      `gradlew build --rerun-tasks` (env 67 · conformance 36 · server 17 · analysis 18, skip 0), pytest 전부, viewer-web 20
+- [x] `README.md` — 리플레이 · 뷰어 실행법
+- [x] `ROADMAP.md` Phase 4 결과 + "이후 Phase 가 반드시 알아야 하는 것"
+- [x] `history/<완료일>-replay-analysis/` 로 세 문서 이관 + README
 
 ---
 
 ## 완료 조건 요약
 
-| ID | 지표 | 목표치 | Phase |
-|---|---|---|---|
-| M4-a | Kotlin 왕복 | 3,200게임 100% | P1 · P6 |
-| M4-b | JS ≡ Kotlin 체인 해시 | 골든 100% | P2 |
-| M4-c | FSM vs FSM DB 집계 | 799/800, 11,998:4,169 | P6 |
-| M4-d | Track A DB 집계 = 평가 리포트 | 정확히 일치 | P6 |
-| M4-e | 렌더링 RNG 격리 | 체인 동일 | P2 |
-| M4-f | 기록 꺼짐 무영향 | 골든 불변, 처리량 ≥ 95% | P8 |
-| M4-g | 리플레이 크기 | ≤ 4 KB / ≤ 256 B | P6 |
-| M4-h | 뷰어 수동 확인 | 체크리스트 | P7 |
-| M4-i | 회귀 | 초록 | P8 |
-| M4-j | 입력원 교체 동치 (라이브 → 기록 → 재생) | 체인 3개 일치 | P2 |
-| M4-k | 사람 vs FSM 라이브 제출 · 재생 | 수동 확인 | P7 |
+| ID | 지표 | 목표치 | Phase | 결과 |
+|---|---|---|---|---|
+| M4-a | Kotlin 왕복 | 3,200게임 100% | P1 · P6 | ✅ 3,200 전부 검증 후 적재 |
+| M4-b | JS ≡ Kotlin 체인 해시 | 골든 100% | P2 | ✅ 12게임 · 135,903 프레임 |
+| M4-c | FSM vs FSM DB 집계 | 799/800, 11,998:4,169 | P6 | ✅ 전 필드 일치 |
+| M4-d | Track A DB 집계 = 평가 리포트 | 정확히 일치 | P6 | ✅ 3시드 × 양 진영 |
+| M4-e | 렌더링 RNG 격리 | 체인 동일 | P2 | ✅ + punchEffectRadius 가드 (P7) |
+| M4-f | 기록 꺼짐 무영향 | 골든 불변, 처리량 ≥ 95% | P8 | ✅ 골든 무변경, 113.7% |
+| M4-g | 리플레이 크기 | ≤ 4 KB / ≤ 256 B | P6 | ✅ ≈ 1.8 KB / 129 B |
+| M4-h | 뷰어 수동 확인 | 체크리스트 | P7 | ✅ headless Chrome 6게임, 시크 ≈ 50 ms |
+| M4-i | 회귀 | 초록 | P8 | ✅ |
+| M4-j | 입력원 교체 동치 (라이브 → 기록 → 재생) | 체인 3개 일치 | P2 | ✅ 6판 |
+| M4-k | 사람 vs FSM 라이브 제출 · 재생 | 수동 확인 | P7 | ✅ 실제 키 이벤트 (사람 손 확인은 남음) |

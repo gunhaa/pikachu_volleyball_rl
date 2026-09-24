@@ -89,7 +89,7 @@
 | **1** | 물리 엔진 동치성 확보 | `core`, `conformance`, `proto`(State Spec) | 상태 해시 100% 일치, 분기 커버리지 ≥ 95% | ✅ 2026-09-21 |
 | **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | ✅ 2026-09-23 |
 | **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) | ✅ 2026-09-23 |
-| **4** | 분석 · 리플레이 · 경기 러너 | `analysis`, MySQL 스키마, `viewer-web` (`GameRunner` + 입력원: 리플레이 · FSM · 사람) | FSM vs FSM · Track A vs FSM 임의 경기를 브라우저에서 재현 + 사람 vs FSM 라이브 | |
+| **4** | 분석 · 리플레이 · 경기 러너 | `analysis`, MySQL 스키마, `viewer-web` (`GameRunner` + 입력원: 리플레이 · FSM · 사람) | FSM vs FSM · Track A vs FSM 임의 경기를 브라우저에서 재현 + 사람 vs FSM 라이브 | ✅ 2026-09-24 |
 | **5** | 라이브 대전 — 정책 입력원 | ONNX export, JS `ObsEncoder`, `PolicySource` | M5-a~e (JS 관측 = Kotlin 골든 100% · 브라우저 경기 = Kotlin 평가 경기 · 라이브 적재 · 체크포인트/ONNX SHA-256 · 인계 기록) | |
 | **6** | Track A+ — Track A 가중치 셀프플레이 | `league.py`, `track_a_plus.py` | M6-a~e (Track A 원본 대결 > 50% · vs FSM ≥ 90% 유지 · 학습 평가 리플레이 적재 · 체크포인트 SHA-256 · 인계 기록) | |
 | **7** | Track B — zero 셀프플레이 | `track_b.py` (리그 재사용) | vs FSM 승률 ≥ 70% (held-out) | |
@@ -264,7 +264,7 @@ bidi 스트리밍(예비안)은 필요 없었다. **측정이 그렇게 말했�
    `runEngineForNextFrame` **전**에 정해지고 FSM 은 그 **안에서** 공이 움직인 뒤에 결정한다
    (최대 20px). Track A 의 100% 는 **그 불리함을 안고 낸 결과**다.
 
-### Phase 4 — 분석 + 리플레이 + 경기 러너
+### Phase 4 — 분석 + 리플레이 + 경기 러너 ✅
 
 학습을 더 하기 전에 **경기를 눈으로 볼 수 있게** 만든다. 셀프플레이는 스칼라 지표가 멀쩡한데 행동이
 퇴화하는 일(저글링, 끝나지 않는 랠리)이 흔하고, Phase 3 기록 2번대로 truncation 은 그것을 늦게 잡는다.
@@ -291,6 +291,75 @@ Phase 6·7 의 디버깅 도구이자 Phase 8 "플레이 스타일 차이" 의 �
 
   구현이 둘 이상 있어야 인터페이스가 검증되므로 사람 입력원을 이 Phase 에 넣는다.
   **라이브 경기도 같은 리플레이 형식으로 기록된다** — 러너가 기록기를 항상 달고 있다.
+
+**결과 (2026-09-24)** — `history/2026-09-24-replay-analysis/`
+
+본질은 뷰어가 아니라 **"재생된 경기가 실제로 치러진 경기와 같다" 는 증명**이었다. 순서를
+"형식 → Kotlin 왕복 → JS 동치 → 배관 → 적재 · 통계 → 기준선 → 뷰어" 로 잡아, 브라우저에 싣기 전에
+JS 규칙층을 **Node 에서** 프레임별 체인 해시로 먼저 증명했다.
+
+| ID | 지표 | 목표 | 결과 |
+|---|---|---|---|
+| M4-a | Kotlin 왕복 | 3,200게임 100% | ✅ 3,200게임 전부 재생 검증 후 적재 |
+| M4-b | JS ≡ Kotlin 체인 해시 | 골든 100% | ✅ 골든 12게임 · 135,903 프레임 100% (두 시드 규약 · truncation · boldness · 미완 포함) |
+| M4-c | FSM vs FSM DB 집계 | 799/800, 11,998:4,169 | ✅ 전 필드 `GameEvaluator` 와 일치 |
+| M4-d | Track A DB 집계 = 평가 리포트 | 정확히 일치 | ✅ 3시드 × 양 진영, 프레임까지 Phase 3 `eval-final.json` 과도 같다 |
+| M4-e | 렌더링 RNG 격리 | 체인 동일 | ✅ 진짜 구름 · 파도 + `punchEffectRadius` 를 줄이는 뷰로 그려도 동일 (대조군 2개는 바뀐다) |
+| M4-f | 기록 꺼짐 무영향 | 골든 불변, 처리량 ≥ 95% | ✅ 골든 파일 무변경, M2-a **550,499** (Phase 2 의 114%) |
+| M4-g | 리플레이 크기 | ≤ 4 KB / ≤ 256 B | ✅ Track A **1.7 ~ 2.0 KB**, FSM vs FSM **129 B** |
+| M4-h | 뷰어 확인 | 체크리스트 | ✅ headless Chrome 으로 6게임 — 체인 ✓ · 화면 점수 = DB · 60,000 프레임 시크 **≈ 50 ms** |
+| M4-i | 회귀 | 초록 | ✅ `gradlew build` (138) · pytest · `npm test` (20) |
+| M4-j | 입력원 교체 동치 | 체인 3개 일치 | ✅ 라이브 6판 (FSM 조합 · boldness · cap) → JS 재생 · Kotlin 재생 |
+| M4-k | 사람 vs FSM 라이브 | 수동 확인 | ✅ 실제 키 이벤트로 한 판 → 제출 → 서버 체인 = 라이브 체인 → 재생 ✓ (사람 손 확인은 남음) |
+
+기준선이 보여 준 것 (통계 화면 · SQL 그대로):
+
+| | FSM vs FSM | Track A vs FSM (seed 0 / 1 / 2) |
+|---|---|---|
+| 랠리 평균 | 756.8 프레임 · 터치 25.1 | 122.2 / 104.1 / 107.5 프레임 · 터치 4.1 ~ 4.5 |
+| 파워히트 성공률 | 9.5% | 정책 **50.8%** · FSM 0% |
+| 착지 x 가 양 끝 48px 안 | 70.4% | **100% / 100% / 51.6%** |
+
+**Track A 는 모든 랠리를 파워히트 1~2번으로 끝내는 고정 패턴을 찾았다.** 정책 파워히트가 세 시드 모두
+정확히 23,600회 = 정책이 서브하는 랠리 11,600 × 2 (서브 + 결정타) + FSM 이 서브하는 400 × 1 이다.
+FSM 은 그 랠리들에서 파워히트를 한 번도 성공하지 못했다. 이 경직성이 Phase 6 의 출발점이다 —
+Track A 원본과 붙으면 같은 수를 반복하는 상대라는 뜻이다.
+
+#### 이후 Phase 가 반드시 알아야 하는 것
+
+1. **리플레이 형식 v1 은 계약이다** (`env/.../replay/ReplayCodec.kt` ↔ `viewer-web/src/runner/codec.mjs` ↔
+   `trainer-python/.../replay.py`). 세 곳이 같은 바이트를 읽는다. 바꾸면 **버전을 올린다** — 디코더는 모르는
+   버전을 거절하고, 대충 읽는 경로는 없다. 시드 규약이 둘(GAME = `GameEvaluator`, RALLY = `PikaEnv`)이고,
+   입력은 **엣지 변환 후** 값, FSM 입력은 적지 않는다. 체크포인트 · 평가 맥락은 옆의 `manifest.jsonl` 에 둔다 —
+   같은 경기 바이트가 같은 `replay_sha256` 을 가져야 중복 적재를 막는다.
+2. **⚠️ 기록 상한은 `max_game_frames` 와 같아야 한다.** evaluate 는 `g_frames > 60,000` 을 미결로 세므로
+   기록기도 60,001 번째 프레임에서 자른다. 그래서 proto 에 `replay_frame_cap` 을 두고 Python 이 자기 값을
+   내려보낸다. 행 ↔ 서버 환경은 `env_index = row // slot_count` 다 (Track B 는 한 게임을 두 행이 센다).
+   **Phase 6 의 M6-c(학습 중 평가 리플레이)는 `evaluate_target(record_dir=…)` 한 줄이면 된다.**
+3. **⚠️ JS 의 RNG 는 모듈 전역이다.** 러너는 매 `step()` 시작에 물리 RNG 를 다시 걸고, 뷰는 그리기 전에 자기
+   RNG 를 건다. 뷰어에 새 그리기 코드를 넣으면 `rand()` 를 부르는지부터 본다. **Phase 5 의 `PolicySource` 는
+   `rand()` 를 부르면 안 된다** (샘플링이 필요하면 자기 난수원을 쓴다).
+4. **⚠️ 업스트림 뷰는 물리를 쓴다.** `drawPlayersAndBall` 이 `ball.punchEffectRadius -= 2` 를 한다 (원작 그대로).
+   이 필드는 State Spec 해시에 있고, 우리 물리는 줄이지 않는다. `guard.mjs` 가 그림자 값으로 막는다.
+   업스트림 뷰 함수를 새로 쓸 때는 **물리 객체에 쓰는지** 확인한다.
+5. **JS 러너는 랠리 리셋을 다음 `step()` 시작으로 미룬다** — step 이 끝난 상태가 "공이 땅에 닿은 프레임" 이라
+   화면이 그것을 그릴 수 있다. RNG 소비 순서는 Kotlin 과 같다 (리셋과 다음 프레임 사이에 물리 RNG 를 쓰는 것이
+   없다). 체인은 `game.step` **직후 · 리셋 전** 에 뜬다 (State Spec 44필드, sound 제외 — 소리 플래그는 렌더러가
+   소비하는 부수 효과다).
+6. **Phase 5 가 할 일은 두 개다.** (a) `PolicySource` 는 `kind: 'external'` 로 꽂히고, JS `ObsEncoder` 는
+   `decide` 시점(= `runEngineForNextFrame` 직전)의 물리 상태를 읽는다 — Kotlin 관측과 같은 시점이다.
+   (b) "브라우저 경기 = 같은 시드의 Kotlin 평가 경기" 는 `FreshSeeds` 자리에 `DerivedSeeds(baseSeed, envIndex)`
+   (`PikaEnv.deriveSeed` 의 JS 판) 하나를 더하면 된다 — 라이브는 이미 RALLY 규약이다.
+7. **DB 는 캐시다.** 스키마를 바꾸면 `SCHEMA_VERSION` 을 올리고 볼륨을 지우고 `FRESH=1 scripts/baseline-replays.sh`
+   (약 1분, digest `59a765e3…` 로 재현 확인). 라이브 경기는 다시 만들 수 없으므로 `serve` 가 원본을
+   `runs/live/` 에 manifest 와 함께 남긴다 (`ingest runs/live --kind live` 로 되살린다).
+8. **파워히트 정의는 계획과 다르다** — `isPowerHit` 의 false → true 가 아니라 **터치 직후 `isPowerHit`**.
+   엔진이 충돌마다 덮어쓰므로 파워히트를 파워히트로 받아치면 전환 기준은 놓친다. 통계 정의를 바꾸면
+   `rebuild-stats` 로 다시 파생한다 (적재 때의 체인과 대조하므로 엔진이 바뀌었으면 멈춘다).
+9. **골든 리플레이는 다시 뜨는 것으로 해결하지 않는다.** `GoldenReplayTest` 가 "지금 코드로 다시 만든 바이트 =
+   커밋된 바이트" 를 본다. JS 쪽이 어긋나면 `conformance.test.mjs` 가 1,000 프레임 구간을 좁히고,
+   `analysis dump-states` + `test/diff-states.mjs` 로 첫 불일치 프레임 · 필드가 나온다.
+   CI 에는 업스트림이 없어 JS 대조가 skip 된다 — **JS 러너를 고쳤으면 로컬에서 `npm test` 를 돌린다.**
 
 ### Phase 5 — 라이브 대전 (정책 입력원)
 

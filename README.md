@@ -195,6 +195,57 @@ GAMES=400 BOLDNESS=1 scripts/eval-policy.sh runs/.../ckpt-final.pt   # boldness 
 > 한 줄이 비대칭이라 내 진영의 폭이 왼쪽 196px · 오른쪽 216px 로 다르다. 한 진영에서만
 > 재면 승률이 실력이 아니라 진영을 재게 된다.
 
+## 리플레이 · 분석 · 뷰어 (Phase 4)
+
+경기를 컴팩트한 리플레이(v1)로 기록하고, **재생으로 검증한 뒤** MySQL 에 적재하고, 브라우저에서
+원본 그래픽으로 재생한다. 같은 경기 러너에 FSM · 사람을 꽂으면 라이브 대전이 된다.
+결과는 [`ROADMAP.md`](ROADMAP.md) 의 Phase 4 와 `history/2026-09-24-replay-analysis/` 에 있다.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml up -d mysql   # 127.0.0.1:3306, DB 는 캐시다
+scripts/baseline-replays.sh            # 기준선 두 벌 기록 · 적재 · 대조 (약 1분, 결정론)
+FRESH=1 scripts/baseline-replays.sh    # 볼륨을 지우고 빈 DB 에서
+```
+
+평가하면서 리플레이를 남기고 적재하기:
+
+```bash
+cd trainer-python && uv run python -m pika_trainer.evaluate \
+  --checkpoint ../runs/track-a-seed0/ckpt-final.pt --seed 0 \
+  --record-replays ../runs/my-eval --set-name my-eval          # 센 게임만 + manifest.jsonl
+cd .. && engine-kotlin/analysis/build/install/analysis/bin/analysis ingest runs/my-eval
+```
+
+`analysis` 명령 (`./gradlew :engine-kotlin:analysis:installDist` 후 `engine-kotlin/analysis/build/install/analysis/bin/analysis`):
+
+| 명령 | 하는 일 |
+|---|---|
+| `ingest <dir> [--kind]` | `manifest.jsonl` + `*.pkr` → 전부 재생 검증 → 한 트랜잭션. 하나라도 틀리면 아무것도 안 넣는다 |
+| `baseline-fsm` | FSM vs FSM 800게임을 `GameEvaluator` 규약으로 기록 · 적재 |
+| `report --set <name> [--expect <json>]` | DB 에서 진영별 집계를 다시 계산 (평가 리포트와 대조) |
+| `rebuild-stats [--set]` | 리플레이 BLOB 에서 랠리 · 파워히트 통계를 다시 파생 |
+| `serve [--port 8081]` | 뷰어 API. 라이브 경기 원본은 `runs/live/` 에도 남는다 |
+| `golden-replays` · `dump-states` | JS ≡ Kotlin 골든 생성 · 불일치 추적 |
+
+뷰어 (로컬 전용 — 업스트림 에셋과 빌드 결과물은 커밋 · 배포하지 않는다):
+
+```bash
+engine-kotlin/analysis/build/install/analysis/bin/analysis serve &
+cd viewer-web && npm install && npm run dev    # http://127.0.0.1:5173
+npm test                                       # JS ≡ Kotlin 골든 · 렌더링 격리 · 라이브 동치 (Node)
+```
+
+- **경기 목록** — 묶음 · 진영 · 승패 · 미결 필터
+- **재생** — 배속 · 시크(처음부터 다시 계산, 60,000 프레임 ≈ 50 ms) · 랠리 점프 · `#/play/<id>/<frame>`.
+  로드할 때 JS 체인을 서버의 Kotlin 체인과 대조해 어긋나면 경고한다
+- **대전** — 좌 · 우에 사람(키보드) / FSM. 왼쪽 `D G R V` + `Z`(파워히트) · `F`(↘), 오른쪽 방향키 + `Enter`.
+  끝나면 서버가 Kotlin 으로 다시 재생해 검증한 뒤 적재한다
+- **통계** — 랠리 길이 · 착지 x · 파워히트 성공률
+
+> ⚠️ 뷰어가 업스트림 그리기 코드를 쓸 때 **그리기가 경기를 바꾸지 않게** 두 가지를 막는다
+> (`viewer-web/src/view/guard.mjs`): 구름 · 파도가 부르는 전역 `rand()` 는 뷰 전용 RNG 로,
+> `drawPlayersAndBall` 이 물리 객체의 `punchEffectRadius` 를 줄이는 부수 효과는 그림자 값으로.
+
 ---
 
 ## 구조
@@ -210,6 +261,7 @@ scripts/
   bench-env.sh              처리량 (a)(b)(c) 세 지점 측정
   bench-train.sh            학습 예산 측정 (정책 forward · 스레드 · 업데이트 · 종단)
   gen-python-proto.sh       env.proto → Python stub 생성
+  baseline-replays.sh       기준선 리플레이 두 벌 기록 · 적재 · 대조 (Phase 4)
   train-track-a.sh          Track A 학습 · A/B · 재개
   eval-policy.sh            체크포인트를 게임 단위로 평가
 tools/js-oracle/            Node 오라클 — physics.js 를 정답으로 돌린다
@@ -217,10 +269,13 @@ tools/targeted-cases.txt    표적 케이스 표 — JS·Kotlin 이 함께 읽�
 engine-kotlin/
   core/                     physics.js 포팅 + XorShift32 (외부 의존성 0)
   env/                      경기 규칙 · 관측 · 행동 · 보상 · 벡터 환경 · 벤치
+    …/replay/               리플레이 v1 — 형식 · 기록기 · 재생기 (외부 의존성 0)
     golden/env-chain-hashes.txt  관측·보상 골든 (커밋 대상)
+    golden/replay/          JS ≡ Kotlin 골든 리플레이 + chains.json (커밋 대상)
   server/                   gRPC 서버 (packed bytes 직렬화)
   conformance/              차분 테스트 하네스 + 실행기
     golden/chain-hashes.txt CI 골든 회귀용 체인 해시 (커밋 대상)
+  analysis/                 적재 · 통계 · 기준선 · 뷰어 API (MySQL · HTTP 는 여기에만)
 trainer-python/
   src/pika_trainer/
     obs_spec.py             obs_spec.proto 파서 (레이아웃 대조)
@@ -232,10 +287,17 @@ trainer-python/
     schedules.py            LR · 엔트로피 · 셰이핑 스케줄
     metrics.py              JSONL 로거 · 런 디렉터리 규약
     track_a.py              Track A 러너 (알고리즘이 아니라 배선과 기록)
-    evaluate.py             게임 단위 평가 — 양 진영 · 미결 규칙 · boldness 축
+    evaluate.py             게임 단위 평가 — 양 진영 · 미결 규칙 · boldness 축 · 리플레이 기록
+    replay.py               리플레이 헤더 파서 · 센 게임만 쓰는 ReplaySink
     server_process.py       평가 전용 서버 기동
     pb/                     env.proto 에서 생성된 stub (커밋 대상)
-deploy/compose/             엔진 서버 이미지와 compose
+viewer-web/
+  src/runner/               GameRunner (경기 규칙층) · 코덱 · 기록기 · 시드 · SHA-256 체인 — Node 와 브라우저 공용
+  src/sources/              입력원: 리플레이 · FSM · 키보드 · 스크립트
+  src/view/                 Pixi 화면 · 재생기 · 라이브 · 목록 · 통계
+  test/                     JS ≡ Kotlin (M4-b) · 렌더링 격리 (M4-e) · 라이브 동치 (M4-j)
+deploy/compose/             엔진 서버 이미지와 compose (+ mysql:8.4.11)
+deploy/mysql/init/          분석 DB 스키마
 ```
 
 문서는 [`CLAUDE.md`](CLAUDE.md) 의 문서 맵을 따른다.
