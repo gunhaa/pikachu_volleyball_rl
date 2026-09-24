@@ -74,13 +74,13 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > "브라우저의 정책 = 평가받은 정책" 을 2,400게임 전수로 증명한다. (FR-10, M5-b)
 
-- [ ] `test/policy-parity.mjs` — manifest → env 별 게임 순서 → 첫 랠리 번호 누적 → `playLive` → 바이트 비교 (§8.2)
-- [ ] 참가자 대조 — manifest 의 체크포인트 SHA = 레지스트리 SHA 가 아니면 시작하지 않는다
-- [ ] 불일치 보고 — 시드 목록 먼저, 그다음 첫 입력 불일치 프레임 · 로짓 여유 · 판정 (§8.3)
-- [ ] 의도적 파손 확인: 첫 서브 규칙 반전 · 첫 랠리 번호 0 고정 · 엣지 트리거 제거 → 각각 하네스가 원인 쪽을 가리키는지
-- [ ] Track A seed 0 · 1 · 2 전수 실행, 소요 시간 기록
-- [ ] 축소 픽스처 `test/fixtures/policy/` — seed0 ONNX + 양 진영 2게임씩 리플레이 + manifest 조각, `npm test` 에 편입
-- [ ] **확인**: **2,400 / 2,400 바이트 일치** — 불일치가 있으면 `PRD.md` §4 의 규칙대로 (버그면 고치고, 수치 동률이면 멈추고 보고)
+- [x] `test/policy-parity.mjs` — manifest → env 별 게임 순서 → 첫 랠리 번호 누적 → `playLive` → 바이트 비교 (§8.2). 핵심은 `src/policy/parity.mjs` (파일 I/O 없음 — P6 브라우저가 재사용)
+- [x] 참가자 대조 — manifest 의 체크포인트 SHA = 레지스트리 SHA = ONNX 메타 SHA, ONNX 파일 SHA = 레지스트리가 아니면 시작하지 않는다
+- [x] 불일치 보고 — 헤더 → 시드(공통 접두부) → 첫 입력 불일치 프레임 · 로짓 여유 · 판정(`tie` / `bug:edge` / `bug`) → 결과, 끝에 게임 목록 (§8.3)
+- [x] 의도적 파손 확인: 첫 서브 규칙 반전 → `header` · 첫 랠리 번호 0 고정 → `seeds` · 엣지 트리거 제거 → `bug:edge` (추가로 엣지 리셋 제거 → `bug:edge`, 미러 끔 → `bug`). 전부 원인 쪽을 가리키고 되돌림
+- [x] Track A seed 0 · 1 · 2 전수 실행 — **15.6 s · 13.3 s · 14.0 s** (Node 24, 시드별 프로세스 병렬)
+- [x] 축소 픽스처 `test/fixtures/policy/track-a-seed0/` — 양 진영 2게임씩(e000 g0·g1, e032 g0·g1) + manifest 조각, `test/parity.test.mjs` (5개) 로 `npm test` 편입
+- [x] **확인**: **2,400 / 2,400 바이트 일치** — 불일치 0, 수치 동률 0. `npm test` 62 / 62
 
 ## P6. 적재 · 사후 검증 · 뷰어 (M5-c)
 
