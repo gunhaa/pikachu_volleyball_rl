@@ -43,15 +43,15 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > 체크포인트에서 브라우저가 읽을 파일을 결정론적으로 만든다. (FR-5 ~ FR-7, NFR-4, M5-d)
 
-- [ ] `pyproject.toml` — dependency group `export`: `onnx==1.23.0`, `onnxruntime==1.30.0` (`uv.lock` 갱신)
-- [ ] `export_onnx.py` — actor 만, 레거시 exporter, opset 17, `dynamic_axes`, 메타데이터 4개 (§5.2)
-- [ ] 레이아웃 인자 (`--obs-layout`, 기본 `for_policy()`), `dim ≠ obs_dim` 이면 실패
-- [ ] 자기 검증 — 서버 띄워 진영별 40게임 관측 수집 → ORT(Python) vs torch 로짓 ≤ 10⁻⁴ · argmax 100% · 여유 분포 (§5.3)
-- [ ] 레지스트리 `runs/policies/registry.jsonl` — 같은 label 재export 시 규칙 (§5.4)
-- [ ] 테스트: 같은 체크포인트 두 번 export → **같은 SHA-256** (메타데이터 포함)
-- [ ] 테스트: 망 구조를 일부러 바꾼 가짜 체크포인트 → 자기 검증 실패, 파일 안 남음
-- [ ] `scripts/export-policies.sh` — Track A 3시드 export
-- [ ] **확인**: pytest 초록, 레지스트리 3줄 · ONNX SHA 3개 · 여유 분포가 `plan.md` §2.4 표와 같은 범위
+- [x] `pyproject.toml` — dependency group `export`: `onnx==1.23.0`, `onnxruntime==1.30.0` (`uv.lock` 갱신)
+- [x] `export_onnx.py` — actor 만, 레거시 exporter, opset 17, `dynamic_axes`, 메타데이터 4개 (§5.2)
+- [x] 레이아웃 인자 (`--obs-layout`, 기본 `for_policy()`), `dim ≠ obs_dim` 이면 실패
+- [x] 자기 검증 — 서버 띄워 진영별 40게임 관측 수집 → ORT(Python) vs torch 로짓 ≤ 10⁻⁴ · argmax 100% · 여유 분포 (§5.3)
+- [x] 레지스트리 `runs/policies/registry.jsonl` — 같은 label 재export 시 규칙 (§5.4)
+- [x] 테스트: 같은 체크포인트 두 번 export → **같은 SHA-256** (메타데이터 포함)
+- [x] 테스트: 망 구조를 일부러 바꾼 가짜 체크포인트 → 자기 검증 실패, 파일 안 남음
+- [x] `scripts/export-policies.sh` — Track A 3시드 export
+- [x] **확인**: pytest 초록, 레지스트리 3줄 · ONNX SHA 3개 · 여유 분포가 `plan.md` §2.4 표와 같은 범위
 
 ## P4. 정책 입력원 · 러너 배선
 
