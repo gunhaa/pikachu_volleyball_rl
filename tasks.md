@@ -27,17 +27,17 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > 추론 없이 증명할 수 있는 것을 먼저 닫는다. (FR-2 ~ FR-4, M5-a)
 
-- [ ] `src/policy/obs-spec.mjs` — `obs_spec.proto` 파서 (`@optional:` 포함) · 필드 목록 · 레이아웃 해시 (§4.3)
-- [ ] 테스트: 네 플래그 조합의 레이아웃 해시 = Kotlin `ObsSpec.layoutHash` (골든 파일 헤더의 16자 · 레지스트리 값과 대조)
-- [ ] 테스트: 정규화 상수 = proto 주석의 숫자 (주석 파싱)
-- [ ] `src/policy/obs.mjs` — `ObsEncoder` (§4.2): 연산마다 `Math.fround`, 부호 반전은 정수 `neg()`
-- [ ] 테스트: 미러된 정지 공(`xVelocity = 0`) · `divingDirection = 0` → float32 비트가 `+0` (§2.3)
-- [ ] `runnerFromReplay` 에 입력원 감싸기 훅 `wrap` (동작 무변경)
-- [ ] `test/obs.test.mjs` — 13 케이스 결정 관측 체인 대조 (§3.3 스케치)
-- [ ] `src/runner/seeds.mjs` — `deriveSeed` (`Math.imul` · `>>>` · `| 0`) + `DerivedSeeds` (§8.1)
-- [ ] 테스트: `deriveSeed` — Kotlin 에서 뽑은 표와 대조 (음수 base · 큰 env · k = 0)
-- [ ] 의도적 파손 확인: `neg()` 를 `-v` 로 · 미러 조건 반전 · 진영 플래그에 미러 적용 → 각각 테스트가 빨개지는지 보고 되돌린다
-- [ ] **확인**: `npm test` 초록 — **M5-a 13 / 13**
+- [x] `src/policy/obs-spec.mjs` — `obs_spec.proto` 파서 (`@optional:` 포함) · 필드 목록 · 레이아웃 해시 (§4.3)
+- [x] 테스트: 네 플래그 조합의 레이아웃 해시 = Kotlin `ObsSpec.layoutHash` (골든 파일 헤더의 16자 · 레지스트리 값과 대조)
+- [x] 테스트: 정규화 상수 = proto 주석의 숫자 (주석 파싱)
+- [x] `src/policy/obs.mjs` — `ObsEncoder` (§4.2): 연산마다 `Math.fround`, 부호 반전은 정수 `neg()`
+- [x] 테스트: 미러된 정지 공(`xVelocity = 0`) · `divingDirection = 0` → float32 비트가 `+0` (§2.3)
+- [x] `runnerFromReplay` 에 입력원 감싸기 훅 `wrap` (동작 무변경)
+- [x] `test/obs.test.mjs` — 13 케이스 결정 관측 체인 대조 (§3.3 스케치)
+- [x] `src/runner/seeds.mjs` — `deriveSeed` (`Math.imul` · `>>>` · `| 0`) + `DerivedSeeds` (§8.1)
+- [x] 테스트: `deriveSeed` — Kotlin 에서 뽑은 표와 대조 (음수 base · 큰 env · k = 0)
+- [x] 의도적 파손 확인: `neg()` 를 `-v` 로 · 미러 조건 반전 · 진영 플래그에 미러 적용 → 각각 테스트가 빨개지는지 보고 되돌린다
+- [x] **확인**: `npm test` 초록 — **M5-a 13 / 13**
 
 ## P3. ONNX export · 레지스트리 (M5-d)
 

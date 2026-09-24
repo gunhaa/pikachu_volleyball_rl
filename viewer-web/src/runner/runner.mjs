@@ -190,14 +190,18 @@ export class GameRunner {
 
 /**
  * 리플레이 바이트 → 러너. 슬롯 플래그가 입력원 종류를 정한다 (External = ReplaySource, 아니면 FsmSource).
+ *
+ * `wrap(src, slot)` 은 만들어진 입력원을 감싸 돌려준다 — 결정 관측을 엿보는 프로브(Phase 5)가 쓴다.
+ * 기본값은 그대로 돌려주므로 러너의 동작은 바뀌지 않는다.
+ *
  * @param {Uint8Array} bytes
- * @param {{onFrame?: function}} [opts]
+ * @param {{onFrame?: function, wrap?: function(Object, number): Object}} [opts]
  */
-export function runnerFromReplay(bytes, { onFrame = null } = {}) {
+export function runnerFromReplay(bytes, { onFrame = null, wrap = (src) => src } = {}) {
   const replay = decodeReplay(bytes);
   let order = 0;
   const sourceFor = (external) => (external ? new ReplaySource(replay, order++) : new FsmSource());
-  const sources = [sourceFor(replay.p1External), sourceFor(replay.p2External)];
+  const sources = [wrap(sourceFor(replay.p1External), 0), wrap(sourceFor(replay.p2External), 1)];
   const runner = new GameRunner({
     sources,
     seeds: new RecordedSeeds(replay),

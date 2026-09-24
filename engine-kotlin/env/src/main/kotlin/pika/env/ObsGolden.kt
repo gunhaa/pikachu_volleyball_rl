@@ -181,6 +181,39 @@ object ObsGolden {
         appendLine("}")
     }
 
+    const val CONSTANTS_FILE = "constants.json"
+
+    /** `deriveSeed` 표의 축. 음수 base · 경계값 · 큰 env · k = 0 을 반드시 포함한다 (JS 의 imul · `>>>` 확인용). */
+    private val SEED_BASES = intArrayOf(0, 1, -1, 7, 123456789, -987654321, Int.MAX_VALUE, Int.MIN_VALUE)
+    private val SEED_ENVS = intArrayOf(0, 1, 2, 15, 255, 1_000_000)
+    private val SEED_RALLIES = intArrayOf(0, 1, 2, 59, 100_000)
+
+    /**
+     * JS 가 Kotlin 코드를 읽지 않고 대조할 값들 — 레이아웃 해시 네 조합과 `deriveSeed` 표.
+     * 골든 체인과 같은 디렉터리에 두고 같은 규칙(바이트 비교)으로 지킨다.
+     */
+    fun renderConstants(): String = buildString {
+        appendLine("{")
+        appendLine("  \"layouts\": [")
+        val combos = listOf(true to false, false to false, true to true, false to true)
+        combos.forEachIndexed { i, (landing, side) ->
+            val opts = ObsSpec.Options(includeExpectedLanding = landing, includeSideFlag = side)
+            append("    {\"includeLanding\":$landing,\"includeSideFlag\":$side,\"dim\":${ObsSpec.dim(opts)},\"layoutHash\":\"${ObsSpec.layoutHash(opts)}\"}")
+            appendLine(if (i < combos.size - 1) "," else "")
+        }
+        appendLine("  ],")
+        appendLine("  \"deriveSeed\": [")
+        val rows = buildList {
+            for (b in SEED_BASES) for (e in SEED_ENVS) for (k in SEED_RALLIES) add("[$b,$e,$k,${PikaEnv.deriveSeed(b, e, k)}]")
+        }
+        rows.chunked(5).forEachIndexed { i, chunk ->
+            append("    ").append(chunk.joinToString(","))
+            appendLine(if (i < (rows.size + 4) / 5 - 1) "," else "")
+        }
+        appendLine("  ]")
+        appendLine("}")
+    }
+
     fun computeAll(onProgress: (String) -> Unit = {}): List<CaseResult> = CASES.map {
         onProgress("${it.name} (환경 ${it.numEnvs}, ${it.frames}스텝)")
         run(it)
@@ -196,6 +229,7 @@ object ObsGolden {
             Files.write(dir.resolve(name), ReplayCodec.encode(replay))
         }
         dir.resolve(CHAINS_FILE).toFile().writeText(render(results))
+        dir.resolve(CONSTANTS_FILE).toFile().writeText(renderConstants())
         return results
     }
 }

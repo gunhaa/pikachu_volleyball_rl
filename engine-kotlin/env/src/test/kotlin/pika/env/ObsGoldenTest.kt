@@ -31,6 +31,14 @@ class ObsGoldenTest {
     }
 
     @Test
+    @DisplayName("JS 대조용 상수 파일(레이아웃 해시 · deriveSeed 표) = 현재 Kotlin 값")
+    fun constantsMatch() {
+        val file = EnvPaths.goldenObsDir.resolve(ObsGolden.CONSTANTS_FILE)
+        assertTrue(Files.exists(file)) { "상수 파일이 없습니다: $file — ./gradlew :engine-kotlin:env:writeObsGolden" }
+        assertEquals(file.toFile().readText(), ObsGolden.renderConstants())
+    }
+
+    @Test
     @DisplayName("리플레이 바이트 = 다시 만든 리플레이, 남는 파일 없음")
     fun replaysMatch() {
         val dir = EnvPaths.goldenObsDir

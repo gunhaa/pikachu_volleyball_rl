@@ -54,3 +54,52 @@ export class FreshSeeds {
     return this.next() | 0;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kotlin 평가 경기의 시드 유도 (Phase 5 FR-4, plan.md §8.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** murmur3 finalizer — `PikaEnv.fmix32` 의 비트 판. */
+function fmix32(h) {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85EBCA6B | 0);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xC2B2AE35 | 0);
+  h ^= h >>> 16;
+  return h | 0;
+}
+
+/**
+ * 환경 [envIndex] 의 랠리 [rallyIndex] 시드 — `PikaEnv.deriveSeed` 와 같다.
+ *
+ * ⚠️ Kotlin 은 `(envIndex + 1) * 0x9E3779B9` 를 **Int 곱셈**(32비트 래핑)으로 한다. JS 의 `*` 는 double 곱이라
+ *    2⁵³ 근처에서 정밀도를 잃는다 — `Math.imul` 이어야 한다. `ushr` 는 `>>>`, 결과는 `| 0` (부호 있는 int32).
+ */
+export function deriveSeed(baseSeed, envIndex, rallyIndex) {
+  let h = baseSeed | 0;
+  h = fmix32(h ^ Math.imul((envIndex + 1) | 0, 0x9E3779B9 | 0));
+  h = fmix32(h ^ Math.imul((rallyIndex + 1) | 0, 0x85EBCA6B | 0));
+  return h;
+}
+
+/**
+ * Kotlin 평가 경기를 다시 치를 때의 시드 — **RALLY 규약**. 게임의 첫 랠리 번호는 환경의 누적 랠리 수다
+ * (`PikaEnv.rallyCounter` 는 게임을 넘어서도 계속 증가한다).
+ */
+export class DerivedSeeds {
+  /** @param {number} baseSeed @param {number} envIndex @param {number} startRally 이 게임의 첫 랠리 번호 */
+  constructor(baseSeed, envIndex, startRally) {
+    this.mode = SEED_MODE.RALLY;
+    this.baseSeed = baseSeed | 0;
+    this.envIndex = envIndex;
+    this.startRally = startRally;
+  }
+
+  first() {
+    return deriveSeed(this.baseSeed, this.envIndex, this.startRally);
+  }
+
+  rallySeed(k) {
+    return deriveSeed(this.baseSeed, this.envIndex, this.startRally + k);
+  }
+}
