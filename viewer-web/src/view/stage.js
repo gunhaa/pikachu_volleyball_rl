@@ -72,6 +72,11 @@ export class Screen {
     return this.guard.step(runner, willDraw);
   }
 
+  /** 정책(비동기 입력원)이 꽂힌 경기의 한 step. */
+  stepAsync(runner, willDraw) {
+    return this.guard.stepAsync(runner, willDraw);
+  }
+
   resetEffects() {
     this.guard.reset();
   }

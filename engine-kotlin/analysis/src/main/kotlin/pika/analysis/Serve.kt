@@ -19,17 +19,25 @@ import java.util.concurrent.Executors
  * | GET  /api/games/{id}                    | 게임 하나 + `chain_sha256` (뷰어가 JS 체인과 대조) |
  * | GET  /api/games/{id}/replay             | 리플레이 v1 바이트 |
  * | GET  /api/stats/{set}?bin=50            | 랠리 길이 · 착지 x · 파워히트 집계 |
- * | POST /api/live-games                    | **유일한 쓰기.** 라이브 경기 바이트 → ingest 와 같은 검증 → 묶음 `live` |
+ * | GET  /api/policies                      | ONNX 정책 목록 (레지스트리, Phase 5) |
+ * | GET  /api/policies/{onnx sha}.onnx      | ONNX 바이트 |
+ * | POST /api/live-games?p1=…&p2=…          | **유일한 쓰기.** 라이브 경기 바이트 → ingest 와 같은 검증 → 묶음 `live` |
  *
  * ⚠️ 라이브 경기는 DB 에만 두지 않는다. 검증을 통과한 바이트를 [liveDir] 에 `manifest.jsonl` 과 함께 남긴다 —
  *    DB 는 캐시라서(plan.md §6.3) 볼륨을 지우면 사라지고, 기준선과 달리 라이브는 다시 만들 수 없다.
  *    되살리기: `analysis ingest runs/live --kind live`.
  *
- * ⚠️ 라이브 제출은 브라우저를 신뢰하지 않는다. 받은 것은 바이트뿐이고, 참가자는 슬롯 플래그에서
- *    유도하며(External = 사람, 아니면 FSM), 재생 검증을 통과해야만 적재한다. JS 규칙층이 틀려
- *    있으면 여기서 드러난다.
+ * ⚠️ 라이브 제출은 브라우저를 신뢰하지 않는다. 받은 것은 바이트뿐이고, 참가자 종류(FSM / External)는
+ *    슬롯 플래그에서 유도하며, 재생 검증을 통과해야만 적재한다. JS 규칙층이 틀려 있으면 여기서 드러난다.
+ *    External 슬롯에 한해서만 "사람인가 어느 정책인가" 의 주장(`p1` · `p2` 쿼리)을 받는다 (plan.md §9.1) —
+ *    주장은 믿고 받되 레지스트리에 없는 정책은 거절하고, 사실 여부는 `verify-policy` 가 사후에 본다.
  */
-class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.file.Path) {
+class Serve(
+    private val db: Db.Config,
+    port: Int,
+    private val liveDir: java.nio.file.Path,
+    private val policies: PolicyRegistry = PolicyRegistry.EMPTY,
+) {
 
     private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", port), 0)
     val port: Int get() = server.address.port
@@ -52,6 +60,9 @@ class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.
         try {
             val path = ex.requestURI.path.removePrefix("/api/").trimEnd('/').split('/')
             val query = parseQuery(ex.requestURI.rawQuery)
+            // 정책은 DB 없이 — 레지스트리만 본다.
+            if (ex.requestMethod == "GET" && path == listOf("policies")) return json(ex, policyList())
+            if (ex.requestMethod == "GET" && path.size == 2 && path[0] == "policies") return bytes(ex, policyBytes(path[1]))
             Db.connect(db).use { conn ->
                 when {
                     ex.requestMethod == "GET" && path == listOf("sets") -> json(ex, sets(conn))
@@ -61,7 +72,7 @@ class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.
                         bytes(ex, replay(conn, id(path[1])))
                     ex.requestMethod == "GET" && path.size == 2 && path[0] == "stats" ->
                         json(ex, stats(conn, path[1], query["bin"]?.toIntOrNull() ?: 50))
-                    ex.requestMethod == "POST" && path == listOf("live-games") -> json(ex, submitLive(conn, ex))
+                    ex.requestMethod == "POST" && path == listOf("live-games") -> json(ex, submitLive(conn, ex, query))
                     else -> throw HttpError(404, "없는 경로: ${ex.requestMethod} ${ex.requestURI.path}")
                 }
             }
@@ -172,35 +183,77 @@ class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.
         )
     }
 
+    // ── 정책 (Phase 5 FR-11) ───────────────────────────────────────────────
+
+    private fun policyList(): List<Map<String, Any?>> = policies.entries.map {
+        linkedMapOf(
+            "label" to it.label, "onnx" to it.onnxSha256, "checkpoint" to "sha256:${it.checkpointSha256}",
+            "obsDim" to it.obsDim, "obsLayoutHash" to it.obsLayoutHash,
+        )
+    }
+
+    private fun policyBytes(name: String): ByteArray {
+        val e = name.takeIf { it.endsWith(".onnx") }?.let { policies.byOnnxSha(it.removeSuffix(".onnx")) }
+            ?: throw HttpError(404, "등록되지 않은 정책: $name")
+        return java.nio.file.Files.readAllBytes(e.file)
+    }
+
     // ── 쓰기: 라이브 경기 제출 ─────────────────────────────────────────────
 
-    private fun submitLive(conn: Connection, ex: HttpExchange): Map<String, Any?> {
+    /** 한 슬롯의 참가자 + (정책이면) 주장한 ONNX SHA. */
+    private class Claim(val participant: Ingest.Participant, val onnx: String?)
+
+    /**
+     * External 슬롯의 참가자 주장 (plan.md §9.1). FSM 슬롯은 주장을 무시한다 — 슬롯 플래그가 진실이다.
+     *   없음 · `human`            → 사람 (기존과 같다)
+     *   `policy:<onnx sha256>`    → 레지스트리의 **체크포인트** SHA 참가자 (FR-12). 없으면 400
+     */
+    private fun claimed(external: Boolean, claim: String?): Claim = when {
+        !external -> Claim(Ingest.Participant.FSM, null)
+        claim == null || claim == "" || claim == "human" -> Claim(HUMAN, null)
+        claim.startsWith("policy:") -> {
+            val sha = claim.removePrefix("policy:")
+            val e = policies.byOnnxSha(sha) ?: throw HttpError(400, "레지스트리에 없는 정책입니다: $claim")
+            Claim(e.participant, sha)
+        }
+        else -> throw HttpError(400, "참가자 주장은 human | policy:<onnx sha256>: $claim")
+    }
+
+    private fun submitLive(conn: Connection, ex: HttpExchange, query: Map<String, String>): Map<String, Any?> {
         val body = ex.requestBody.readNBytes(MAX_LIVE_BYTES + 1)
         if (body.size > MAX_LIVE_BYTES) throw HttpError(413, "리플레이가 너무 큽니다 (> $MAX_LIVE_BYTES B)")
-        // 참가자는 바이트에서 유도한다 — 요청이 무엇을 주장하든 슬롯 플래그가 진실이다.
+        // 참가자 종류는 바이트에서 유도한다 — 요청이 무엇을 주장하든 슬롯 플래그가 진실이다.
         val flags = if (body.size > 5) body[5].toInt() else 0
-        fun who(external: Boolean) = if (external) Ingest.Participant("human", null, "keyboard") else Ingest.Participant.FSM
-        val verified = Ingest.verify("live", body, who(flags and 1 != 0), who(flags and 2 != 0))
+        val c1 = claimed(flags and 1 != 0, query["p1"])
+        val c2 = claimed(flags and 2 != 0, query["p2"])
+        val verified = Ingest.verify("live", body, c1.participant, c2.participant)
         if (!verified.replay.ended) throw HttpError(422, "끝나지 않은 라이브 경기는 받지 않습니다")
-        keepLiveFile(verified)
+        keepLiveFile(verified, c1.onnx, c2.onnx)
         val result = Ingest.insert(conn, LIVE_SET, "live", listOf(verified), note = "브라우저 라이브 대전 (P7)")
         val id = rows(conn, "SELECT id FROM game WHERE replay_sha256 = ?", listOf(verified.sha256)) { it.getLong(1) }.single()
         return linkedMapOf("id" to id, "inserted" to (result.inserted == 1), "chain" to verified.chain.finalHex, "score" to verified.replay.finalScore.toList())
     }
 
-    /** 라이브 원본을 파일로 — 이미 있으면(같은 경기) 건너뛴다. manifest 는 ingest 가 읽는 모양 그대로. */
+    /**
+     * 라이브 원본을 파일로 — 이미 있으면(같은 경기) 건너뛴다. manifest 는 ingest 가 읽는 모양 그대로에
+     * 정책 슬롯이면 `onnx`(ONNX SHA) 를 더한다 — ingest 는 모르는 필드를 무시하고, `verify-policy` 가 읽는다.
+     */
     @Synchronized
-    private fun keepLiveFile(v: Ingest.Verified) {
+    private fun keepLiveFile(v: Ingest.Verified, onnx1: String?, onnx2: String?) {
         java.nio.file.Files.createDirectories(liveDir)
         val file = "${v.sha256}.pkr"
         val path = liveDir.resolve(file)
         if (java.nio.file.Files.exists(path)) return
         java.nio.file.Files.write(path, v.bytes)
-        fun who(p: Ingest.Participant) = linkedMapOf("kind" to p.kind, "label" to p.label)
+        fun who(p: Ingest.Participant, onnx: String?) = linkedMapOf<String, Any?>("kind" to p.kind, "label" to p.label).apply {
+            // ⚠️ 체크포인트를 적지 않으면 되살릴 때 identity 가 `external:label:…` 로 바뀌어 기준선과 다른 행이 된다.
+            p.checkpoint?.let { put("checkpoint", it) }
+            onnx?.let { put("onnx", "sha256:$it") }
+        }
         val line = Json.write(
             linkedMapOf(
                 "file" to file, "set" to LIVE_SET, "envIndex" to null, "gameInEnv" to null,
-                "p1" to who(v.p1), "p2" to who(v.p2), "counted" to true, "unresolved" to false,
+                "p1" to who(v.p1, onnx1), "p2" to who(v.p2, onnx2), "counted" to true, "unresolved" to false,
             ),
         )
         java.nio.file.Files.writeString(
@@ -241,6 +294,8 @@ class Serve(private val db: Db.Config, port: Int, private val liveDir: java.nio.
 
     companion object {
         const val LIVE_SET = "live"
+
+        private val HUMAN = Ingest.Participant("human", null, "keyboard")
 
         /** 60,000 프레임 × 2 슬롯 + 헤더 · 랠리 표보다 넉넉히. */
         const val MAX_LIVE_BYTES = 1 shl 20

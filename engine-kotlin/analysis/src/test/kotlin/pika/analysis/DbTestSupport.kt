@@ -41,6 +41,10 @@ object DbTestSupport {
     fun count(conn: Connection, table: String): Int =
         conn.createStatement().use { st -> st.executeQuery("SELECT COUNT(*) FROM $table").use { it.next(); it.getInt(1) } }
 
+    /** 한 행 한 열 (Long). */
+    fun scalar(conn: Connection, sql: String): Long =
+        conn.createStatement().use { st -> st.executeQuery(sql).use { check(it.next()) { "행 없음: $sql" }; it.getLong(1) } }
+
     /** PikaEnv(External 무작위 vs FSM) 로 [games] 게임을 기록해 evaluate.py 와 같은 모양의 디렉터리를 만든다. */
     fun writeEvalDir(dir: Path, set: String, games: Int, baseSeed: Int = 1): List<Replay> {
         Files.createDirectories(dir)

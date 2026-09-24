@@ -9,7 +9,7 @@
  * 다른 가중치로 치른 경기와 비교하는 사고를 막는다. 불일치가 하나라도 있으면 exit 1.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { PolicyModel } from '../src/policy/model.mjs';
@@ -29,7 +29,8 @@ if (positionals.length !== 1 || opt['base-seed'] === undefined) {
   console.error('사용법: policy-parity.mjs <리플레이 묶음 디렉터리> --base-seed <n> [--registry …] [--limit N]');
   process.exit(2);
 }
-const fromRepo = (p) => (isAbsolute(p) ? p : resolve(REPO, p));
+/** 현재 디렉터리 기준으로 있으면 그것, 아니면 저장소 루트 기준. */
+const fromRepo = (p) => (isAbsolute(p) || existsSync(resolve(p)) ? resolve(p) : resolve(REPO, p));
 const dir = fromRepo(positionals[0]);
 const baseSeed = Number(opt['base-seed']);
 if (!Number.isInteger(baseSeed)) throw new Error(`--base-seed 는 정수: ${opt['base-seed']}`);

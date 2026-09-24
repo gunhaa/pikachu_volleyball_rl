@@ -86,19 +86,20 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > 정책이 낀 라이브 경기가 기록으로 남고, 그 기록이 정말 그 정책의 수인지 다시 확인할 수 있다. (FR-11 ~ FR-16, M5-c)
 
-- [ ] `analysis/PolicyRegistry.kt` — 레지스트리 읽기, ONNX SHA → (체크포인트 SHA, label, 파일)
-- [ ] `serve --policies runs/policies` — `GET /api/policies`, `GET /api/policies/<onnx_sha>.onnx`
-- [ ] `POST /api/live-games?p1=…&p2=…` — 참가자 주장 규칙 표 (§9.1), 레지스트리에 없으면 400
-- [ ] `runs/live/manifest.jsonl` 에 `onnx` 필드 — `ingest runs/live --kind live` 가 그대로 읽는지 확인
-- [ ] `ServeTest` — 주장 없음 = 기존 동작, 정책 주장 → 기준선과 같은 `participant` 행, 미등록 SHA → 400
-- [ ] `test/verify-policy.mjs` — 리플레이 + manifest(또는 게임 id) → 정책 슬롯 입력 재추론 대조 (§9.2)
-- [ ] 뷰어 설정 — 정책 옵션 · 목록 · 좌우 독립 (§10)
-- [ ] 뷰어 라이브 — ORT 동적 import, ONNX SHA · 메타 대조, `await advance` 루프, 제출에 주장 쿼리
-- [ ] 뷰어 시드 모드 "평가 경기 재현"
-- [ ] headless Chrome — M5-b 브라우저 6게임 (시드별 양 진영 1게임) 바이트 일치
-- [ ] headless Chrome — 추론 지연 p50 · p99 · 최대 · 첫 세션 생성 (§10.1). NFR-5 (p99 ≤ 5 ms) 판정
-- [ ] 실경기 — 정책 vs FSM · 정책 vs 사람 · 정책 vs 정책 각 1게임 제출 → 적재 → 재생 ✓ → `verify-policy` 100%
-- [ ] **확인**: M5-c 체크리스트 전부, 스크린샷 첨부
+- [x] `analysis/PolicyRegistry.kt` — 레지스트리 읽기, ONNX SHA → (체크포인트 SHA, label, 파일). 로드 시 파일 SHA 재계산 · label 중복 · 같은 ONNX 두 label 은 실패
+- [x] `serve --policies runs/policies` — `GET /api/policies`, `GET /api/policies/<onnx_sha>.onnx` (DB 없이)
+- [x] `POST /api/live-games?p1=…&p2=…` — 참가자 주장 규칙 표 (§9.1), 레지스트리에 없으면 400 · 형식 오류 400 · FSM 슬롯 주장 무시
+- [x] `runs/live/manifest.jsonl` 에 `checkpoint` · `onnx` 필드 — `ingest runs/live --kind live` 가 그대로 읽음 (실데이터: 적재 0 · 중복 4). ⚠️ 기존 manifest 는 `checkpoint` 를 안 적어 되살리면 기준선과 다른 행이 될 뻔했다 — 함께 고침
+- [x] `ServeTest` — 주장 없음 = 기존 동작, 정책 주장 → 기준선과 같은 `participant` 행 (DB 를 지우고 되살려도), 미등록 SHA → 400 · 레지스트리 거절 2종 (+2 테스트)
+- [x] `test/verify-policy.mjs` — `--game-id` · `--dir` · 파일. 핵심 `src/policy/verify.mjs` (`PolicySource` 를 `ReplaySource` 위에 겹친다). manifest 에 `onnx` 가 없으면 `checkpoint` 로 레지스트리를 찾아 기준선에도 쓴다 — seed2 800게임 1,290,302 프레임 100%
+- [x] `test/verify.test.mjs` 4개 — 평가 리플레이 100% · 한 바이트 변조 → 그 프레임 · 정책 vs 정책 두 슬롯 · 정책 아닌 입력원의 경기에 정책 주장 → 불일치
+- [x] 뷰어 설정 — 정책 옵션 · 목록(`/api/policies`) · 좌우 독립 · 시드 모드
+- [x] 뷰어 라이브 — ORT 동적 import (빌드: `model` 청크 73 KB + wasm 14 MB 는 정책을 고를 때만), ONNX SHA · 체크포인트 · 메타 대조, `await advance` 펌프, 제출에 주장 쿼리, 배속
+- [x] 뷰어 시드 모드 "평가 경기 재현" — `#/live/<p1>/<p2>/eval/<base>/<env>/<startRally>/<firstServeP2>`, 제출하지 않고 리플레이 SHA-256 을 보인다
+- [x] headless Chrome — M5-b 브라우저 **6 / 6** (시드별 e005-g1 · e040-g1, 첫 랠리 번호 > 0 · 첫 서브 오른쪽) 리플레이 SHA-256 = 원본 파일
+- [x] headless Chrome — 추론 지연 (prepare = 관측 + ORT run, 10,344 회): 평균 **38 µs** · p50 < 0.1 · p99 **0.2** · p99.9 2.5 · 최대 4.8 ms, 첫 세션 생성 162 ms (이후 117 ~ 121). **NFR-5 (p99 ≤ 5 ms) ✓**. Chrome 타이머 해상도 0.1 ms (cross-origin isolation 없음) — p50 은 해상도 이하
+- [x] 실경기 — 정책 vs FSM #3203 (15:0) · 사람(실제 keydown/keyup 120회) vs 정책 #3204 (1:15) · 정책 vs 정책 #3205 (15:0) → 서버 체인 = 라이브 체인 → 적재 → 뷰어 재생 ✓ → `verify-policy` **100%** (4개 슬롯). 참가자 행 = 기준선 행 (id 2 · 3 · 4)
+- [x] **확인**: M5-c 체크리스트 전부, 스크린샷 `runs/viewer-check/m5b-*.png` · `m5c-*.png` (확인 스크립트 `m5b-browser.mjs` · `m5c-live.mjs` 같은 곳, puppeteer-core 25.12 저장소 밖). `npm test` 66 / 66, analysis 테스트 초록
 
 ## P7. 회귀 · 문서 · 이관 (M5-e, M5-f)
 

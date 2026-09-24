@@ -17,6 +17,13 @@ export const api = {
     return new Uint8Array(await res.arrayBuffer());
   },
   stats: (set, bin = 50) => fetch(`/api/stats/${encodeURIComponent(set)}?bin=${bin}`).then(json),
-  submitLive: (bytes) =>
-    fetch('/api/live-games', { method: 'POST', body: bytes, headers: { 'Content-Type': 'application/octet-stream' } }).then(json),
+  /** @param {{p1?:string, p2?:string}} [claims] External 슬롯의 참가자 주장 — `human` | `policy:<onnx sha>` (Phase 5) */
+  submitLive: (bytes, claims = {}) =>
+    fetch(`/api/live-games?${new URLSearchParams(claims)}`, { method: 'POST', body: bytes, headers: { 'Content-Type': 'application/octet-stream' } }).then(json),
+  policies: () => fetch('/api/policies').then(json),
+  policyOnnx: async (sha) => {
+    const res = await fetch(`/api/policies/${sha}.onnx`);
+    if (!res.ok) throw new Error(`정책 ${sha.slice(0, 16)}: ${res.status}`);
+    return new Uint8Array(await res.arrayBuffer());
+  },
 };

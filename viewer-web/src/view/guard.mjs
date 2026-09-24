@@ -10,6 +10,7 @@
 'use strict';
 
 import { setCustomRng } from '../../../upstream/src/resources/js/rand.js';
+import { advance } from '../runner/live-loop.mjs';
 
 export class DrawGuard {
   constructor(viewRng) {
@@ -27,9 +28,24 @@ export class DrawGuard {
    * @param {boolean} willDraw 이 step 직후에 draw 하는가 (배속 재생은 프레임을 건너뛴다)
    */
   step(runner, willDraw) {
-    const b0 = runner.physics.ball;
-    const x = b0.punchEffectX, y = b0.punchEffectY, r = b0.punchEffectRadius;
-    const result = runner.step();
+    const before = this.before(runner);
+    return this.after(runner, willDraw, before, runner.step());
+  }
+
+  /** [step] 의 비동기 판 — 정책(비동기 입력원)이 꽂힌 경기. `advance` 가 beginFrame → prepare → step 을 한다. */
+  async stepAsync(runner, willDraw) {
+    const before = this.before(runner);
+    return this.after(runner, willDraw, before, await advance(runner));
+  }
+
+  /** @private */
+  before(runner) {
+    const b = runner.physics.ball;
+    return [b.punchEffectX, b.punchEffectY, b.punchEffectRadius];
+  }
+
+  /** @private */
+  after(runner, willDraw, [x, y, r], result) {
     const b = runner.physics.ball;
     if (b.punchEffectX !== x || b.punchEffectY !== y || (r === 0 && b.punchEffectRadius > 0)) this.punch = b.punchEffectRadius;
     if (!willDraw && this.punch > 0) this.punch = Math.max(0, this.punch - 2);

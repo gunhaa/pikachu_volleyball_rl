@@ -25,13 +25,17 @@ class ServeTest {
     private lateinit var conn: Connection
     private lateinit var serve: Serve
     private lateinit var liveDir: Path
+    private lateinit var policyDir: Path
+    private lateinit var onnxSha: String
     private val http = HttpClient.newHttpClient()
 
     @BeforeEach
     fun setUp() {
         conn = DbTestSupport.freshDb()
         liveDir = Files.createTempDirectory("pika-live-")
-        serve = Serve(DbTestSupport.config, 0, liveDir).start()
+        policyDir = Files.createTempDirectory("pika-policies-")
+        onnxSha = writeRegistry(policyDir, "test", CKPT)
+        serve = Serve(DbTestSupport.config, 0, liveDir, PolicyRegistry.load(policyDir)).start()
     }
 
     @AfterEach
@@ -44,6 +48,21 @@ class ServeTest {
     private fun get(p: String): HttpResponse<ByteArray> =
         http.send(HttpRequest.newBuilder(url(p)).GET().build(), HttpResponse.BodyHandlers.ofByteArray())
     private fun getJson(p: String): Any? = get(p).also { assertEquals(200, it.statusCode(), String(it.body())) }.let { Json.parse(String(it.body())) }
+    /** 가짜 ONNX(내용은 상관없다 — 서버는 바이트를 해시만 한다) + 레지스트리 한 줄. ONNX SHA 를 돌려준다. */
+    private fun writeRegistry(dir: Path, label: String, checkpointHex: String): String {
+        val bytes = "fake-onnx:$label".toByteArray()
+        Files.write(dir.resolve("$label.onnx"), bytes)
+        val sha = Ingest.sha256Hex(bytes)
+        val line = Json.write(
+            linkedMapOf(
+                "label" to label, "checkpoint_sha256" to checkpointHex, "onnx" to "runs/policies/$label.onnx",
+                "onnx_sha256" to sha, "obs_dim" to 41, "obs_layout_hash" to "cd".repeat(32),
+            ),
+        )
+        Files.writeString(dir.resolve("registry.jsonl"), line + "\n")
+        return sha
+    }
+
     private fun post(p: String, body: ByteArray): HttpResponse<String> =
         http.send(HttpRequest.newBuilder(url(p)).POST(HttpRequest.BodyPublishers.ofByteArray(body)).build(), HttpResponse.BodyHandlers.ofString())
 
@@ -138,5 +157,67 @@ class ServeTest {
         }
         assertTrue(submitted >= 5)
         assertEquals(submitted.toLong(), getJson("games?set=live").obj()["total"])
+    }
+
+    @Test
+    @DisplayName("정책: 목록 · ONNX 바이트, 주장 없음 = 사람, policy 주장 → 기준선과 같은 participant 행, 미등록 · 형식 오류 → 400")
+    fun policyClaims(@TempDir evalDir: Path, @TempDir liveSrc: Path) {
+        val list = getJson("policies").arr().map { it.obj() }
+        assertEquals(listOf("test"), list.map { it.str("label") })
+        assertEquals(onnxSha, list[0].str("onnx"))
+        assertEquals("sha256:$CKPT", list[0].str("checkpoint"))
+        assertArrayEquals("fake-onnx:test".toByteArray(), get("policies/$onnxSha.onnx").body())
+        assertEquals(404, get("policies/${"0".repeat(64)}.onnx").statusCode())
+        assertEquals(404, get("policies/$onnxSha").statusCode())
+
+        // 평가 기준선 — writeEvalDir 의 정책 참가자는 checkpoint = CKPT
+        DbTestSupport.writeEvalDir(evalDir, "api-eval", games = 1, baseSeed = 1)
+        Ingest.ingestDir(conn, evalDir)
+        val baselineP1 = DbTestSupport.scalar(conn, "SELECT p1_id FROM game")
+
+        val games = DbTestSupport.writeEvalDir(liveSrc, "x", games = 3, baseSeed = 2).map { ReplayCodec.encode(it) }
+
+        // 미등록 · 형식 오류 주장은 400 이고 아무것도 들어가지 않는다
+        assertEquals(400, post("live-games?p1=policy:${"0".repeat(64)}", games[0]).statusCode())
+        assertEquals(400, post("live-games?p1=robot", games[0]).statusCode())
+        assertEquals(1, DbTestSupport.count(conn, "game"))
+        assertTrue(Files.notExists(liveDir.resolve("manifest.jsonl")))
+
+        // 주장 없음 = 기존 동작 (사람)
+        val human = Json.parse(post("live-games", games[0]).body()).obj()
+        assertEquals("human", getJson("games/${(human["id"] as Number).toLong()}").obj()["p1"].obj().str("kind"))
+
+        // policy 주장 → 체크포인트 SHA 참가자 = 기준선과 같은 행. FSM 슬롯(p2)의 주장은 무시한다.
+        val res = post("live-games?p1=policy:$onnxSha&p2=policy:${"0".repeat(64)}", games[1])
+        assertEquals(200, res.statusCode(), res.body())
+        val id = (Json.parse(res.body()).obj()["id"] as Number).toLong()
+        assertEquals(baselineP1, DbTestSupport.scalar(conn, "SELECT p1_id FROM game WHERE id = $id"))
+        assertEquals("fsm", getJson("games/$id").obj()["p2"].obj().str("kind"))
+
+        // manifest 에 체크포인트 · onnx 가 남고, DB 를 지우고 되살려도 같은 참가자다
+        val line = Json.parse(Files.readAllLines(liveDir.resolve("manifest.jsonl"))[1]).obj()
+        assertEquals("sha256:$CKPT", line["p1"].obj().str("checkpoint"))
+        assertEquals("sha256:$onnxSha", line["p1"].obj().str("onnx"))
+        assertEquals(null, line["p2"].obj()["onnx"])
+        conn.createStatement().use { it.executeUpdate("DELETE FROM game WHERE set_id <> (SELECT id FROM match_set WHERE name = 'api-eval')") }
+        assertEquals(2, Ingest.ingestDir(conn, liveDir, kind = "live").inserted)
+        assertEquals(2L, DbTestSupport.scalar(conn, "SELECT COUNT(*) FROM game WHERE p1_id = $baselineP1"))
+    }
+
+    @Test
+    @DisplayName("레지스트리: ONNX 파일 SHA 가 다르거나 label 이 두 줄이면 적재 실패")
+    fun registryRejects(@TempDir dir: Path) {
+        writeRegistry(dir, "p", CKPT)
+        Files.write(dir.resolve("p.onnx"), "다른 가중치".toByteArray())
+        assertTrue(runCatching { PolicyRegistry.load(dir) }.exceptionOrNull()?.message?.contains("SHA") == true)
+        writeRegistry(dir, "p", CKPT)
+        val line = Files.readString(dir.resolve("registry.jsonl"))
+        Files.writeString(dir.resolve("registry.jsonl"), line + line)
+        assertTrue(runCatching { PolicyRegistry.load(dir) }.exceptionOrNull()?.message?.contains("두 줄") == true)
+    }
+
+    private companion object {
+        /** `DbTestSupport.writeEvalDir` 의 정책 참가자 체크포인트. */
+        val CKPT = "ab".repeat(32)
     }
 }

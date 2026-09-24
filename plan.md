@@ -550,6 +550,15 @@ node test/verify-policy.mjs --game-id 123     # 또는 runs/live/<sha>.pkr + man
 headless Chrome (Phase 4 M4-h 와 같은 방식)으로 정책 vs FSM 한 게임을 돌리며 `prepare` 한 번의 시간을
 `performance.now()` 로 모은다. 첫 세션 생성 시간(wasm 컴파일 포함)은 따로 적는다. ROADMAP 에 p50 · p99 · 최대를 기록한다.
 
+**P6 결과** (2026-09-24): 브라우저 M5-b 6 / 6, 추론 지연 p99 0.2 ms (평균 38 µs, 첫 세션 생성 162 ms), 실경기 3종 적재 ·
+`verify-policy` 100%. 구현에서 바뀐 점:
+- 틱 콜백(`frameClock`)은 동기라 밀린 프레임 수(`owed`)를 쌓고 **펌프 하나**가 `await screen.stepAsync` 로 소화한다 —
+  추론 await 중에 다음 틱이 와도 두 번째 펌프가 겹쳐 돌지 않는다. `DrawGuard.stepAsync` 가 펀치 효과 처리를 공유한다.
+- `verify-policy` 는 manifest 에 `onnx` 가 없으면 `checkpoint` 로 레지스트리를 찾는다 — 평가 기준선 묶음에도 쓸 수 있다.
+- `--game-id` 는 받은 바이트의 SHA-256 으로 `runs/live/<sha>.pkr` 의 manifest 줄을 찾는다 (serve 가 SHA 이름으로 남긴다).
+- 라이브 manifest 에 `checkpoint` 도 적는다 — 전에는 kind · label 만 적어서, DB 를 지우고 되살리면 정책 참가자가
+  `external:label:…` 로 들어가 기준선과 다른 행이 됐을 것이다 (사람만 제출하던 Phase 4 에서는 드러나지 않았다).
+
 ## 11. 작업 순서
 
 | 순서 | 무엇 | 왜 이 순서 | 정확해야 하는 곳 |
