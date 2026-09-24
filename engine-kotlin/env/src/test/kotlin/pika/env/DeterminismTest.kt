@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
  * M2-d — 결정론. (tasks.md P4, FR-10)
  *
  * `(seed, 행동 시퀀스, 구성)` 이 같으면 관측·보상 바이트가 **완전히** 같아야 한다.
- * 이것이 깨지면 Phase 7 의 두 트랙 비교도, Phase 4 의 리플레이도 성립하지 않는다.
+ * 이것이 깨지면 Phase 8 의 두 트랙 비교도, Phase 4 의 리플레이도 성립하지 않는다.
  * **타협 대상이 아니다** (PRD §4).
  */
 class DeterminismTest {

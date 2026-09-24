@@ -25,7 +25,7 @@ next-step autoreset 에서는 랠리가 끝난 **다음** 스텝이 리셋에 �
 환경을 얼마나 아는가
 ─────────────────────────────────────────────────────────────────────────────
 `env_client` 를 import 하지 않는다. 필요한 것은 `step` · `reward_terms` · `slot_sides`
-뿐이고, 망에게 요구하는 것은 `act` 와 `value` 뿐이다. Track B(Phase 6)가 같은 수집기를
+뿐이고, 망에게 요구하는 것은 `act` 와 `value` 뿐이다. Track B(Phase 7)가 같은 수집기를
 쓰고, 테스트가 서버 없이 도는 이유다 (NFR-4 의 방향).
 """
 
@@ -307,7 +307,7 @@ class RolloutMetrics:
     def to_dict(self) -> dict[str, Any]:
         """`left.*` · `right.*` 로 평탄화하고, 합산은 최상위에 둔다.
 
-        Phase 7 이 두 트랙을 겹쳐 그린다 — 주 곡선이 최상위에 있어야 플롯이 진영 두 열을
+        Phase 8 이 두 트랙을 겹쳐 그린다 — 주 곡선이 최상위에 있어야 플롯이 진영 두 열을
         먼저 합치지 않아도 된다.
         """
         out: dict[str, Any] = {

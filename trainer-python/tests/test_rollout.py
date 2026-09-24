@@ -509,7 +509,7 @@ def test_행동_분포와_항별_기여가_집계된다() -> None:
 
 
 def test_메트릭이_진영_접두사로_평탄화된다() -> None:
-    """`plan.md` §11 의 JSONL 스키마 — Phase 7 이 두 트랙을 겹쳐 그린다."""
+    """`plan.md` §11 의 JSONL 스키마 — Phase 8 이 두 트랙을 겹쳐 그린다."""
     env = ScriptedEnv([[(3, "term")], [(3, "term")]], sides=np.array([0, 1], dtype=np.intp))
     _, metrics = collector(env).collect(8, np.array([1, 0, 0, 0, 0], dtype=np.float32))
     flat = metrics.to_dict()
