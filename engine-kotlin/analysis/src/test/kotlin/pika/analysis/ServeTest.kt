@@ -40,8 +40,9 @@ class ServeTest {
 
     @AfterEach
     fun tearDown() {
-        serve.stop()
-        conn.close()
+        // MySQL 이 없으면 setUp 이 assumption 으로 중단된다 — 그래도 @AfterEach 는 돈다.
+        if (::serve.isInitialized) serve.stop()
+        if (::conn.isInitialized) conn.close()
     }
 
     private fun url(p: String) = URI.create("http://127.0.0.1:${serve.port}/api/$p")
