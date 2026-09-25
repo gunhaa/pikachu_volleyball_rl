@@ -90,7 +90,7 @@
 | **2** | RL 환경과 학습 파이프라인 연결 | `env`, `server`, `env_client.py`, compose | ≥ 50,000 step/s, Gymnasium 규약 준수 | ✅ 2026-09-23 |
 | **3** | Track A — FSM 이기기 | `ppo.py`, `track_a.py`, 평가 스크립트 | vs FSM 승률 ≥ 90% (시드 ≥ 3) | ✅ 2026-09-23 |
 | **4** | 분석 · 리플레이 · 경기 러너 | `analysis`, MySQL 스키마, `viewer-web` (`GameRunner` + 입력원: 리플레이 · FSM · 사람) | FSM vs FSM · Track A vs FSM 임의 경기를 브라우저에서 재현 + 사람 vs FSM 라이브 | ✅ 2026-09-24 |
-| **5** | 라이브 대전 — 정책 입력원 | ONNX export, JS `ObsEncoder`, `PolicySource` | M5-a~e (JS 관측 = Kotlin 골든 100% · 브라우저 경기 = Kotlin 평가 경기 · 라이브 적재 · 체크포인트/ONNX SHA-256 · 인계 기록) | |
+| **5** | 라이브 대전 — 정책 입력원 | ONNX export, JS `ObsEncoder`, `PolicySource` | M5-a~e (JS 관측 = Kotlin 골든 100% · 브라우저 경기 = Kotlin 평가 경기 · 라이브 적재 · 체크포인트/ONNX SHA-256 · 인계 기록) | ✅ 2026-09-25 |
 | **6** | Track A+ — Track A 가중치 셀프플레이 | `league.py`, `track_a_plus.py` | M6-a~e (Track A 원본 대결 > 50% · vs FSM ≥ 90% 유지 · 학습 평가 리플레이 적재 · 체크포인트 SHA-256 · 인계 기록) | |
 | **7** | Track B — zero 셀프플레이 | `track_b.py` (리그 재사용) | vs FSM 승률 ≥ 70% (held-out) | |
 | **8** | 세 트랙 비교 | 비교 리포트 | A · A+ · B 상호 대결 + 학습 곡선 분석 완료 | |
@@ -336,6 +336,8 @@ Track A 원본과 붙으면 같은 수를 반복하는 상대라는 뜻이다.
    기록기도 60,001 번째 프레임에서 자른다. 그래서 proto 에 `replay_frame_cap` 을 두고 Python 이 자기 값을
    내려보낸다. 행 ↔ 서버 환경은 `env_index = row // slot_count` 다 (Track B 는 한 게임을 두 행이 센다).
    **Phase 6 의 M6-c(학습 중 평가 리플레이)는 `evaluate_target(record_dir=…)` 한 줄이면 된다.**
+   (⚠️ Phase 5 에서 정정: 학습 루프 `TrackARunner.evaluate` 는 `evaluate_target` 이 아니라 `evaluate_policy` 를
+   직접 부른다 — Phase 5 의 "Phase 6 착수 전 체크리스트" 참고.)
 3. **⚠️ JS 의 RNG 는 모듈 전역이다.** 러너는 매 `step()` 시작에 물리 RNG 를 다시 걸고, 뷰는 그리기 전에 자기
    RNG 를 건다. 뷰어에 새 그리기 코드를 넣으면 `rand()` 를 부르는지부터 본다. **Phase 5 의 `PolicySource` 는
    `rand()` 를 부르면 안 된다** (샘플링이 필요하면 자기 난수원을 쓴다).
@@ -361,7 +363,7 @@ Track A 원본과 붙으면 같은 수를 반복하는 상대라는 뜻이다.
    `analysis dump-states` + `test/diff-states.mjs` 로 첫 불일치 프레임 · 필드가 나온다.
    CI 에는 업스트림이 없어 JS 대조가 skip 된다 — **JS 러너를 고쳤으면 로컬에서 `npm test` 를 돌린다.**
 
-### Phase 5 — 라이브 대전 (정책 입력원)
+### Phase 5 — 라이브 대전 (정책 입력원) ✅
 
 학습한 가중치를 브라우저의 입력원으로 꽂는다. 이것으로 **사람 · FSM · 리플레이 · 가중치** 네 입력원이
 임의 조합으로 대전한다. Track A+ 보다 먼저 두는 이유: 셀프플레이를 시작하기 전에 Track A 정책과
@@ -390,6 +392,105 @@ Phase 6 부터는 긴 학습이 시작된다. 어느 지점에서 쉬든 재개�
 | M5-d | **체크포인트와 ONNX 파일의 SHA-256 쌍을 기록한다** | ONNX 는 체크포인트에서 다시 만들 수 있지만 export 결과가 바이트 단위로 같다는 보장은 없다. 어느 ONNX 가 어느 체크포인트에서 나왔는지는 해시 쌍으로만 확인된다. `runs/` 는 git 대상이 아니다 (M6-d 와 같은 이유) |
 | M5-e | **"이후 Phase 가 반드시 알아야 하는 것" 을 이 문서에 기록한다** | 최소한: JS/Kotlin 관측에서 발견한 차이와 원인, 브라우저 추론 지연(프레임당 ms), 고정한 `onnxruntime-web` · opset 버전, 그리고 **Phase 6 착수 전 체크리스트** — 특히 M6-c(학습 중 평가 리플레이 적재) 배선은 아직 없다는 사실 |
 
+**결과 (2026-09-25)** — `history/2026-09-25-live-policy/`
+
+본질은 브라우저 추론이 아니라 **"브라우저의 정책 = 평가받은 그 정책" 의 증명**이었다. 순서를
+"관측 골든 → JS 관측 → export → 입력원 → 평가 경기 재현 → 적재 → 뷰어" 로 잡아, M5-a 로 관측을 비트 단위로
+먼저 고정했다 — 그래야 M5-b 가 갈라졌을 때 남는 용의자가 "추론" 과 "배선" 둘뿐이다. 증명은 Node 에서,
+확인은 브라우저에서 (둘은 같은 모듈 · 같은 ORT wasm 을 쓴다).
+
+| ID | 지표 | 목표 | 결과 |
+|---|---|---|---|
+| M5-a ⚑ | JS 결정 관측 체인 = Kotlin | 13 케이스 100% | ✅ 13 / 13 — EnvGolden 11 구성 + `side-flag-right` · `side-flag-both`. 의도적 파손 3종(부호 반전을 `-v` 로 · 미러 조건 반전 · 진영 플래그 미러)이 각각 빨개진다 |
+| M5-b | 정책 vs FSM 재현 = Kotlin 평가 리플레이 바이트 | Node 2,400 · 브라우저 6 | ✅ Node **2,400 / 2,400** (시드별 13 ~ 16 s), 불일치 · 수치 동률 0. headless Chrome **6 / 6** (첫 랠리 번호 > 0 · 첫 서브 오른쪽 포함) |
+| M5-c | 라이브 적재 · 재생 · 사후 검증 | 3종 각 1게임+, 100% | ✅ 정책 vs FSM #3203 · 사람 vs 정책 #3204 · 정책 vs 정책 #3205 → 서버 체인 = 라이브 체인 → 적재 → 재생 → `verify-policy` **100%** (4 슬롯). 참가자 = 기준선과 같은 행 |
+| M5-d | 체크포인트 ↔ ONNX SHA-256, export 결정론 | 3쌍 · 재export 동일 | ✅ 아래 표. 두 번 export 해도 같은 SHA |
+| M5-e | 인계 기록 | PRD §4 최소 항목 | ✅ 아래 두 절 |
+| M5-f | 회귀 + 골든 불변 | 초록 | ✅ `gradlew build` (146) · pytest (148) · `npm test` (66). `ObsEncoder.kt` · `PikaEnv.kt` · `evaluate.py` · 골든 3종 diff 0 |
+
+⚑ ROADMAP 원문의 "관측 골든 11 케이스" 대신 **관측 전용 골든 13 케이스** (`engine-kotlin/env/golden/obs/`).
+기존 env 골든은 관측 · 보상을 한 해시로 묶어 JS 가 관측만으로 재현할 수 없고, 11 케이스 어디에도
+Track A 의 오른쪽 평가 구성(미러 + 진영 플래그)이 없었다. 기존 골든은 건드리지 않았다.
+
+체크포인트 ↔ ONNX (`runs/policies/registry.jsonl`, `runs/` 는 git 밖이라 이 표가 기록이다):
+
+| label | 체크포인트 SHA-256 | ONNX SHA-256 | 여유 최소 | < 1.6 × 10⁻⁵ | 고유 관측 |
+|---|---|---|---|---|---|
+| track-a-seed0 | `50c77b87dbf34d0de2d51d6103af11b036db0a7d22a7e7052e74a87493024f89` | `3d087c0b2201da764ee97b87e70e0868493e6acc62f5c0ce04d5d13f7fa6625a` | 1.12 × 10⁻⁵ | 1 | 17,903 |
+| track-a-seed1 | `1cf7b1624716f4810771e688eaace489a4f5cc67451df6138bd756f6b0ea5d53` | `e71d4e66cad4f57ff30bffd5dd224035117dfd9dfad673dbac2ac2327a858a74` | 2.88 × 10⁻⁵ | 0 | 13,070 |
+| track-a-seed2 | `f97e36aa52bad56971a185685727ec229f07fd890fa967fd40221f224b66163c` | `dd4d80bd0dca1ab60446fccf041cf84f628e902a74d01738d2bbe6ffbdab6a9f` | 3.62 × 10⁻⁵ | 0 | 14,983 |
+
+모두 41차원 · 레이아웃 해시 `d696c0b3…` · opset 17 · torch 2.14.0. 커밋한 픽스처
+`viewer-web/test/fixtures/policy/track-a-seed0.onnx` (97 KB, 저장소에 가중치를 넣은 첫 사례) 는 seed0 의 ONNX 와 같은 파일이다.
+
+#### 이후 Phase 가 반드시 알아야 하는 것
+
+1. **관측은 JS 가 Kotlin 을 따라간다, 반대가 아니다.** `ObsEncoder.kt` 를 고치면 Track A 가 본 관측이 바뀌어
+   평가받은 정책이 더 이상 존재하지 않는다. JS/Kotlin 차이가 생길 수 있는 곳은 셋이었고 전부 설계에서 막았다
+   (`viewer-web/src/policy/obs.mjs`):
+   - **float32 반올림** — Kotlin 은 연산마다 float32 로 반올림한다. JS 는 double 이라 여러 연산을 이어 한 뒤
+     한 번만 반올림하면 다를 수 있다 → **연산마다 `Math.fround`**.
+   - **`-0`** — Kotlin 의 미러는 `Int` 에서 부호를 뒤집어 `-0` 이 없다. JS 의 `-0 / 20` 은 float32 비트 `0x80000000` 이라
+     정책 행동은 같아도 체인이 달라진다 → 부호 반전은 정수 `neg()` 로.
+   - **진영 플래그는 미러하지 않는다** — 이 규칙은 "미러 + 진영 플래그" 조합에서만 의미가 있는데 기존 골든이
+     그 조합을 밟지 않았다. 새 두 케이스가 덮는다 (파손 확인에서 그 둘만 빨개진다).
+
+   **결정 관측**의 정의: terminal 관측은 결정이 아니다 (autoreset 스텝은 행동을 버린다). 골든은 "물리 프레임을
+   돌린 행동을 정한 관측" 만 담으므로 **결정 시점 오류(리셋 전 상태로 결정)도 같은 골든이 잡는다.**
+   `obs_spec.proto` 를 바꾸면 소비자가 넷이다 — Kotlin · Python · JS(`obs-spec.mjs`) · ONNX 메타데이터. 레이아웃
+   해시가 어긋나면 `PolicySource` 생성이 실패한다. JS `deriveSeed` 는 `Math.imul` 이어야 한다 (`*` 는 double 곱).
+2. **고정한 버전.** `onnxruntime-web` **1.30.0** (정확 일치) · Python `onnx` 1.23.0 · `onnxruntime` 1.30.0 (의존성 그룹
+   `export`) · **opset 17 · 레거시(TorchScript) exporter** · torch 2.14.0 (`uv.lock`). dynamo exporter 는 같은 체크포인트를
+   두 번 내보내면 **다른 바이트**가 나와서 쓰지 않는다. torch 업그레이드로 레거시 exporter 가 사라지면 export 결정론
+   테스트가 먼저 빨개진다 (대안: `onnx.helper` 로 5-노드 그래프를 직접 쓴다). ORT 는 wasm · **스레드 1** · Node 와
+   브라우저 모두 `onnxruntime-web/wasm` 진입점 (기본 `"."` 은 둘이 다른 파일을 로드한다). WebGPU · WebGL 은 쓰지
+   않는다 — 백엔드마다 부동소수 결과가 달라 M5-b 가 백엔드의 함수가 된다. ORT JS 에는 모델 메타데이터 API 가 없어
+   `model.mjs` 가 ModelProto 필드 14 를 직접 읽는다.
+3. **브라우저 추론 지연은 문제가 아니다.** headless Chrome, `prepare`(관측 + ORT run) 10,344 회: 평균 **38 µs** ·
+   p99 **0.2 ms** · p99.9 2.5 ms · 최대 4.8 ms, 첫 세션 생성 162 ms (wasm 컴파일, 이후 117 ~ 121 ms). Node 는 p50 0.01 ms.
+   25fps 예산 40 ms 의 0.5%. 망(41 → 128 → 128 → 18)이 몇 배 커져도 여유가 있다.
+4. **⚠️ argmax 여유는 보장이 아니라 측정이고, 체크포인트마다 다시 잰다.** 백엔드 간 로짓 오차 상한을 8 × 10⁻⁶ 로
+   보면 여유 < 1.6 × 10⁻⁵ 인 관측은 백엔드에 따라 행동이 뒤집힐 수 있다. Track A 는 seed0 에 1개뿐이고 뒤집히지
+   않았지만, 여유 분포는 **가중치의 성질**이라 A+ · B 체크포인트는 다를 수 있다 (행동 로짓이 평평한 정책일수록
+   동률 근처 관측이 많다). `export_onnx` 가 자기 검증 때 레지스트리 줄의 `margin` 에 적는다 — `below_risky` 를 본다.
+   재현이 갈라지면 `policy-parity.mjs` 가 첫 불일치를 `header` → `seeds` → `tie` / `bug:edge` / `bug` 로 판정한다.
+   `tie` 가 아니면 버그다.
+5. **러너는 비동기 결정 준비 단계를 가진다.** `step()` = `beginFrame()`(랠리 리셋 적용) → 입력원 `prepare`(비동기,
+   **슬롯 순서대로 순차 await**) → `decide`(동기) → 물리. `prepare` 가 없는 입력원(리플레이 · FSM · 사람)은 예전과 같다.
+   `PolicySource` 는 전역 `rand()` 를 부르지 않는다 — 샘플링 모드가 필요해지면 자기 PRNG 로.
+6. **⚠️ 정책 출력은 "누른 상태" 이고 리플레이 바이트는 엣지 변환 후 값이다.** 리플레이용 `decodeAction` 을 정책에
+   쓰면 엣지 변환이 빠진다 → `decodePolicyAction` + `EdgeTrigger`, 랠리 시작마다 엣지 리셋. 파손 확인에서 둘 다
+   `bug:edge` 로 잡힌다.
+7. **서버는 참가자 주장을 믿고 받는다.** 라이브 제출의 `?p1=policy:<onnx sha>` 는 레지스트리에 있어야 하고
+   (없으면 400), 적재는 **체크포인트 SHA** 로 해서 평가 기준선과 같은 `participant` 행이 된다. 주장이 참인지는
+   `node viewer-web/test/verify-policy.mjs --game-id <id>` 가 ONNX 재추론으로 사후 확인한다. 라이브 manifest 는
+   `checkpoint` · `onnx` 를 적어야 한다 — 없으면 DB 를 되살릴 때 다른 참가자 행이 된다 (Phase 5 에서 발견 · 수정).
+8. **정책 vs 정책은 Kotlin 대조 대상이 없다.** 브라우저에서 치를 수 있고 `verify-policy` 가 두 슬롯 모두 검증하지만,
+   "같은 시드의 Kotlin 경기와 같은가" 는 정책 vs FSM 만 증명됐다 (`evaluate_target` 이 `p2="fsm"` 고정).
+
+#### Phase 6 착수 전 체크리스트
+
+- [ ] **M6-c 배선이 아직 없다.** 학습 루프의 주기 평가 `TrackARunner.evaluate` (`track_a.py:401`) 는 환경을 직접 만들어
+      `evaluate_policy` 를 부르고 리플레이를 남기지 않는다. 기록 배선(`record_replays` · `replay_frame_cap` ·
+      `ReplaySink` · manifest)은 전부 `evaluate_target(record_dir=…, set_name=…, participant=…)` 안에 있다 — 그쪽으로 바꾸거나
+      같은 세 줄을 옮긴다. `participant.checkpoint` 에 SHA 를 적으려면 **평가 전에 그 시점 체크포인트를 저장**해야 한다.
+      적재는 `analysis ingest <dir>`. **긴 학습은 이것이 연결된 뒤에만 돌린다.**
+- [ ] **리그 평가(M6-a)는 새 경로다.** `evaluate_target` 은 상대가 FSM 고정이다. A+ vs Track A 원본은
+      `EXTERNAL_VS_EXTERNAL` 에 두 정책을 꽂는 평가기가 필요하고, 그 리플레이는 manifest 에 두 참가자를 적어야
+      `verify-policy` 로 검증된다.
+- [ ] **시작 전에 Track A 원본이 그 원본인지 확인한다** — `shasum -a 256 runs/track-a-seed*/ckpt-final.pt` 가 위 표와 같은가.
+      Track A 원본이 상대 풀의 고정 기준점이다.
+- [ ] **A+ 체크포인트를 브라우저에 꽂는 절차**:
+      `cd trainer-python && uv run python -m pika_trainer.export_onnx <ckpt> --label <이름>` (평가 서버를 스스로 띄워
+      진영별 40게임으로 자기 검증, 실패하면 파일을 남기지 않는다). label = 파일 이름 = 레지스트리 키이고, **같은 label 에
+      다른 체크포인트는 실패한다** — 새 label 을 쓴다. 출력의 `margin.below_risky` 를 본다.
+      관측 레이아웃이 `for_policy()` (41차원) 가 아니면 `--obs-layout` 을 준다.
+- [ ] **의심 체크포인트를 라이브로 붙어 보는 절차**: export → `analysis serve --policies runs/policies` 를 **다시 띄운다**
+      (레지스트리는 시작할 때 읽는다) → 뷰어 대전 화면에서 정책 선택 (좌 · 우 · 정책 vs 정책). 평가에서 이상했던 **그 경기**를
+      다시 치르려면 `#/live/<p1>/<p2>/eval/<baseSeed>/<envIndex>/<startRally>/<firstServeP2>` — `startRally` 는 그 env 에서 앞선
+      게임들의 랠리 수 합이다 (`src/policy/parity.mjs` 가 계산하는 방식).
+- [ ] **그 체크포인트의 평가 묶음을 브라우저 정책과 대조**할 때: `node viewer-web/test/policy-parity.mjs <record_dir> --base-seed <N>`
+      (정책 vs FSM 묶음, 참가자 SHA 를 먼저 대조한다).
 
 ### Phase 6 — Track A+ (Track A 가중치 셀프플레이)
 

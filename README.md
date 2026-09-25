@@ -246,6 +246,27 @@ npm test                                       # JS ≡ Kotlin 골든 · 렌더�
 > (`viewer-web/src/view/guard.mjs`): 구름 · 파도가 부르는 전역 `rand()` 는 뷰 전용 RNG 로,
 > `drawPlayersAndBall` 이 물리 객체의 `punchEffectRadius` 를 줄이는 부수 효과는 그림자 값으로.
 
+## 정책 라이브 대전 (Phase 5)
+
+체크포인트를 ONNX 로 내보내 브라우저의 입력원으로 꽂는다. 브라우저의 정책은 **평가받은 그 정책과 같은 수를 둔다** —
+Track A 평가 경기 2,400개를 브라우저와 같은 코드(Node)로 다시 치러 리플레이 바이트가 전부 같음을 확인했다.
+
+```bash
+scripts/export-policies.sh          # Track A 3시드 → runs/policies/*.onnx + registry.jsonl (결정론, 자기 검증 포함)
+cd trainer-python && uv run python -m pika_trainer.export_onnx <ckpt> --label <이름>   # 임의 체크포인트
+cd .. && engine-kotlin/analysis/build/install/analysis/bin/analysis serve --policies runs/policies &
+```
+
+- **대전** 화면에서 좌 · 우 각각 정책을 고를 수 있다 (정책 vs FSM · 사람 · 정책). ONNX 는 정책을 고를 때만 받고,
+  SHA-256 · 관측 레이아웃이 레지스트리와 다르면 시작하지 않는다. 끝난 경기는 체크포인트 SHA 로 적재된다
+- **평가 경기 재현** — `#/live/<p1>/<p2>/eval/<baseSeed>/<envIndex>/<startRally>/<firstServeP2>` 로 Kotlin 평가의 한 경기를
+  같은 시드로 다시 치른다
+
+```bash
+node viewer-web/test/policy-parity.mjs runs/baselines/track-a-seed0 --base-seed 0   # 평가 묶음 전수 재현 (M5-b)
+node viewer-web/test/verify-policy.mjs --game-id <id>    # 적재된 경기의 정책 입력 = ONNX 재추론인가
+```
+
 ---
 
 ## 구조
@@ -264,6 +285,7 @@ scripts/
   baseline-replays.sh       기준선 리플레이 두 벌 기록 · 적재 · 대조 (Phase 4)
   train-track-a.sh          Track A 학습 · A/B · 재개
   eval-policy.sh            체크포인트를 게임 단위로 평가
+  export-policies.sh        Track A 3시드 ONNX export + 레지스트리 (Phase 5)
 tools/js-oracle/            Node 오라클 — physics.js 를 정답으로 돌린다
 tools/targeted-cases.txt    표적 케이스 표 — JS·Kotlin 이 함께 읽는다
 engine-kotlin/
@@ -272,6 +294,7 @@ engine-kotlin/
     …/replay/               리플레이 v1 — 형식 · 기록기 · 재생기 (외부 의존성 0)
     golden/env-chain-hashes.txt  관측·보상 골든 (커밋 대상)
     golden/replay/          JS ≡ Kotlin 골든 리플레이 + chains.json (커밋 대상)
+    golden/obs/             JS ≡ Kotlin 결정 관측 골든 13 케이스 (커밋 대상)
   server/                   gRPC 서버 (packed bytes 직렬화)
   conformance/              차분 테스트 하네스 + 실행기
     golden/chain-hashes.txt CI 골든 회귀용 체인 해시 (커밋 대상)
@@ -289,13 +312,15 @@ trainer-python/
     track_a.py              Track A 러너 (알고리즘이 아니라 배선과 기록)
     evaluate.py             게임 단위 평가 — 양 진영 · 미결 규칙 · boldness 축 · 리플레이 기록
     replay.py               리플레이 헤더 파서 · 센 게임만 쓰는 ReplaySink
+    export_onnx.py          체크포인트 → ONNX (actor 만) · 자기 검증 · 레지스트리
     server_process.py       평가 전용 서버 기동
     pb/                     env.proto 에서 생성된 stub (커밋 대상)
 viewer-web/
   src/runner/               GameRunner (경기 규칙층) · 코덱 · 기록기 · 시드 · SHA-256 체인 — Node 와 브라우저 공용
-  src/sources/              입력원: 리플레이 · FSM · 키보드 · 스크립트
+  src/sources/              입력원: 리플레이 · FSM · 키보드 · 스크립트 · 정책
+  src/policy/               JS ObsEncoder · 관측 레이아웃 · ORT 세션 · 평가 재현 · 사후 검증
   src/view/                 Pixi 화면 · 재생기 · 라이브 · 목록 · 통계
-  test/                     JS ≡ Kotlin (M4-b) · 렌더링 격리 (M4-e) · 라이브 동치 (M4-j)
+  test/                     JS ≡ Kotlin (M4-b · M5-a) · 렌더링 격리 (M4-e) · 라이브 동치 (M4-j) · 평가 재현 (M5-b)
 deploy/compose/             엔진 서버 이미지와 compose (+ mysql:8.4.11)
 deploy/mysql/init/          분석 DB 스키마
 ```

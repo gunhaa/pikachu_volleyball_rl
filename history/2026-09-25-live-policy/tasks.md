@@ -105,13 +105,14 @@ P3(export)은 P1·P2 와 독립이라 병행할 수 있다.
 
 > 휴지 지점. 재개할 때 맥락이 끊기지 않게 남긴다.
 
-- [ ] 회귀: `./gradlew build` · `uv run pytest` · `npm test` 초록
-- [ ] NFR-1: `ObsEncoder.kt` · `PikaEnv.kt` · `evaluate.py` 무수정, 골든 3종 파일 무변경 (`git diff` 로 확인)
-- [ ] ROADMAP Phase 5 결과 표 (M5-a ~ f) · 체크포인트 ↔ ONNX SHA 쌍 3개
-- [ ] ROADMAP "이후 Phase 가 반드시 알아야 하는 것" — JS/Kotlin 관측 차이와 원인 · 추론 지연 · ORT 1.30.0 / opset 17 / 레거시 exporter · argmax 여유 분포와 체크포인트마다 다시 재야 하는 이유
-- [ ] ROADMAP **Phase 6 착수 전 체크리스트** — M6-c(학습 중 평가 리플레이 적재) 배선 없음, `evaluate_target(record_dir=…)` 한 줄이라는 사실, A+ 체크포인트 export · 레지스트리 절차, 의심 체크포인트를 라이브로 꽂는 절차
-- [ ] `history/<완료일>-live-policy/` 로 `PRD.md` · `plan.md` · `tasks.md` + `README.md` 이관
-- [ ] **확인**: 저장소 루트에 세 문서가 없고 history 에 있다
+- [x] 회귀: `./gradlew build --rerun-tasks` (Kotlin 146) · `uv run pytest` (148) · `npm test` (66) 초록
+- [x] NFR-1: `ObsEncoder.kt` · `PikaEnv.kt` · `evaluate.py` 무수정, 골든 3종(`conformance/golden` · `env-chain-hashes.txt` · `env/golden/replay`) — `git diff c5b592f HEAD` 0줄
+- [x] ROADMAP Phase 5 결과 표 (M5-a ~ f) · 체크포인트 ↔ ONNX SHA 쌍 3개 (전체 64자)
+- [x] ROADMAP "이후 Phase 가 반드시 알아야 하는 것" 8항목 — JS/Kotlin 관측 차이와 원인 · 추론 지연 · ORT 1.30.0 / opset 17 / 레거시 exporter · argmax 여유 분포와 체크포인트마다 다시 재야 하는 이유
+- [x] ROADMAP **Phase 6 착수 전 체크리스트** — M6-c 배선 없음, A+ export · 레지스트리 절차, 의심 체크포인트를 라이브로 꽂는 절차. ⚠️ "`evaluate_target(record_dir=…)` 한 줄" 은 **틀렸다**: 학습 루프(`TrackARunner.evaluate`)는 `evaluate_policy` 를 직접 부르고, `evaluate_target` 은 상대가 FSM 고정이라 M6-a 에 못 쓴다 — 체크리스트에 정확히 적고 Phase 4 기록 2번에 정정 주석
+- [x] README — "정책 라이브 대전 (Phase 5)" 절 · 구조 트리
+- [x] `history/2026-09-25-live-policy/` 로 `PRD.md` · `plan.md` · `tasks.md` + `README.md` 이관
+- [x] **확인**: 저장소 루트에 세 문서가 없고 history 에 있다
 
 ---
 
